@@ -1,0 +1,123 @@
+package com.tianhuiu.solvex.network.adapter
+
+import android.util.Log
+import com.tianhuiu.solvex.data.models.ModelProvider
+import com.tianhuiu.solvex.data.models.ProviderKind
+import com.tianhuiu.solvex.network.LlmEvent
+import com.tianhuiu.solvex.network.ProviderAdapter
+import com.tianhuiu.solvex.network.SseStreamClient
+import com.tianhuiu.solvex.network.StreamRequest
+import com.tianhuiu.solvex.network.ToolRegistry
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.*
+import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.Request
+
+/**
+ * Anthropic Messages API 适配器。
+ * 使用 POST /messages 流式端点，认证方式为 x-api-key。
+ * SSE 事件通过 content_block_delta 提取文本增量，message_stop 标记结束。
+ */
+class AnthropicAdapter(
+    private val client: OkHttpClient,
+    internal val sseClient: SseStreamClient,
+    private val json: Json
+) : ProviderAdapter {
+
+    override suspend fun stream(request: StreamRequest): Flow<LlmEvent> = callbackFlow {
+        // 构建 Anthropic Messages API 请求体
+        val body = buildJsonObject {
+            put("model", request.model)
+            put("stream", true)
+            put("max_tokens", 4096)
+            if (request.systemPrompt.isNotBlank()) {
+                put("system", request.systemPrompt)
+            }
+            put("messages", buildJsonArray {
+                add(buildJsonObject {
+                    put("role", "user")
+                    put("content", buildJsonArray {
+                        // 图片在前，文本在后（Anthropic 推荐顺序）
+                        request.imagesBase64.forEach { img ->
+                            add(buildJsonObject {
+                                put("type", "image")
+                                put("source", buildJsonObject {
+                                    put("type", "base64")
+                                    put("media_type", "image/jpeg")
+                                    put("data", img)
+                                })
+                            })
+                        }
+                        add(buildJsonObject {
+                            put("type", "text"); put(
+                            "text",
+                            request.userPrompt
+                        )
+                        })
+                    })
+                })
+            })
+            request.tools?.let { tools ->
+                put("tools", ToolRegistry.formatForProvider(tools, ProviderKind.ANTHROPIC))
+            }
+        }
+
+        val httpRequest = Request.Builder()
+            .url("${request.provider.url}/messages")
+            .header("x-api-key", request.provider.apiKey)
+            .header("anthropic-version", "2023-06-01")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val job = launch {
+            try {
+                sseClient.stream(
+                    request = httpRequest,
+                    firstDeltaTimeoutMillis = request.firstDeltaTimeoutMillis,
+                    onEvent = { _, _, _, data ->
+                        try {
+                            val obj = json.parseToJsonElement(data).jsonObject
+                            val eventType = obj["type"]?.jsonPrimitive?.content
+                            when (eventType) {
+                                // 文本增量事件
+                                "content_block_delta" -> {
+                                    val delta = obj["delta"]?.jsonObject
+                                    val text = delta?.get("text")?.jsonPrimitive?.content
+                                    if (text != null) return@stream SseStreamClient.StreamEventResult(
+                                        delta = text
+                                    )
+                                }
+                                // 消息结束事件
+                                "message_stop" -> return@stream SseStreamClient.StreamEventResult(
+                                    done = true
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Log.e("AnthropicAdapter", "解析错误: $data", e)
+                        }
+                        null
+                    },
+                    onDelta = { trySend(LlmEvent.TextDelta(it)) },
+                    onToolCall = { trySend(it) }
+                )
+                trySend(LlmEvent.Done); close()
+            } catch (e: Exception) {
+                trySend(LlmEvent.Error(e.message ?: "未知错误")); close(e)
+            }
+        }
+        awaitClose { job.cancel() }
+    }
+
+    /** Anthropic 无公开模型列表接口，返回常用模型 */
+    override suspend fun fetchModels(provider: ModelProvider): List<String> =
+        withContext(Dispatchers.IO) {
+            listOf("claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5")
+        }
+}

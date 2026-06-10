@@ -1,0 +1,330 @@
+package com.tianhuiu.solvex.floating
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.PixelFormat
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.*
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import kotlin.math.abs
+
+/**
+ * 悬浮球管理类：负责悬浮窗的生命周期、状态切换及交互逻辑。
+ */
+/**
+ * 悬浮球管理器：负责 WindowManager 挂载、触摸事件分发及状态同步。
+ */
+class FloatingBallManager(private val context: Context) {
+
+    companion object {
+        /** 全局自动隐藏延迟时长（毫秒） */
+        private const val AUTO_HIDE_DELAY_MS = 5000L
+    }
+
+    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val layoutParams = WindowManager.LayoutParams().apply {
+        type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        format = PixelFormat.TRANSLUCENT
+        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        width = WindowManager.LayoutParams.WRAP_CONTENT
+        height = WindowManager.LayoutParams.WRAP_CONTENT
+        gravity = Gravity.TOP or Gravity.START
+        x = 0
+        y = 500
+    }
+
+    private var composeView: ComposeView? = null
+
+    private val _enableAutoHide = mutableStateOf(value = true)
+    var enableAutoHide: Boolean
+        get() = _enableAutoHide.value
+        set(value) {
+            _enableAutoHide.value = value
+            if (!value) {
+                // 如果关闭了自动隐藏，立即取消计时器并恢复显示
+                handler.removeCallbacks(hideRunnable)
+                if (displayMode == BallDisplayMode.HIDDEN_STRIP) {
+                    displayMode = BallDisplayMode.FULL
+                    snapToEdge()
+                }
+            } else {
+                // 如果开启了自动隐藏，开始计时
+                resetHideTimer()
+            }
+        }
+    var status by mutableStateOf(BallStatus.IDLE)
+    private var displayMode by mutableStateOf(BallDisplayMode.FULL)
+    private var isAtLeftEdge by mutableStateOf(value = true)
+    private var ballText by mutableStateOf<String?>(null)
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val hideRunnable = Runnable {
+        displayMode = BallDisplayMode.HIDDEN_STRIP
+        snapToEdge()
+    }
+
+    var onSingleClick: (() -> Unit)? = null
+    var onDoubleClick: (() -> Unit)? = null
+    var onLongClick: (() -> Unit)? = null
+
+    /**
+     * 显示悬浮球。
+     */
+    fun show() {
+        // 如果 View 存在且已 attached，无需操作
+        val existing = composeView
+        if ((existing != null) && (existing.parent != null)) return
+
+        // 如果 View 存在但已 detached（异常恢复），重新 attach
+        if (existing != null) {
+            windowManager.addView(existing, layoutParams)
+            resetHideTimer()
+            return
+        }
+
+        composeView = ComposeView(context).apply {
+            (context as? LifecycleOwner)?.let { setViewTreeLifecycleOwner(it) }
+            (context as? ViewModelStoreOwner)?.let { setViewTreeViewModelStoreOwner(it) }
+            (context as? SavedStateRegistryOwner)?.let { setViewTreeSavedStateRegistryOwner(it) }
+
+            setContent {
+                FloatingBallView(
+                    status = status,
+                    displayMode = displayMode,
+                    isAtLeftEdge = isAtLeftEdge,
+                    ballText = ballText
+                )
+            }
+
+            setOnTouchListener(FloatingTouchListener())
+        }
+
+        windowManager.addView(composeView, layoutParams)
+        resetHideTimer()
+    }
+
+    /**
+     * 隐藏悬浮球。
+     */
+    fun hide() {
+        handler.removeCallbacks(hideRunnable)
+        handler.post {
+            composeView?.let {
+                if (it.parent != null) {
+                    try {
+                        windowManager.removeView(it)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            composeView = null
+        }
+    }
+
+    /**
+     * 临时隐藏（不清除 composeView 状态），用于截图。
+     */
+    fun tempHide() {
+        handler.removeCallbacks(hideRunnable)
+        handler.post {
+            composeView?.let {
+                if (it.parent != null) {
+                    try {
+                        windowManager.removeView(it)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 恢复临时隐藏的悬浮球。
+     */
+    fun restore() {
+        handler.post {
+            composeView?.let {
+                if (it.parent == null) {
+                    try {
+                        windowManager.addView(it, layoutParams)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            resetHideTimer()
+        }
+    }
+
+    /**
+     * 更新悬浮球状态。所有状态均在无操作 5 秒后允许自动隐藏。
+     */
+    fun updateStatus(newStatus: BallStatus) {
+        status = newStatus
+        if ((newStatus == BallStatus.SUCCESS) || (newStatus == BallStatus.ERROR)) {
+            handler.removeCallbacks(hideRunnable)
+            // 结果显示 5 秒后执行清理
+            handler.postDelayed({
+                status = BallStatus.IDLE
+                ballText = null
+                if (enableAutoHide) {
+                    displayMode = BallDisplayMode.HIDDEN_STRIP
+                    snapToEdge()
+                }
+            }, AUTO_HIDE_DELAY_MS)
+        } else {
+            resetHideTimer()
+        }
+    }
+
+    /**
+     * 在悬浮球上显示文字，并强制恢复为全显模式。
+     */
+    fun showText(text: String) {
+        ballText = text
+        displayMode = BallDisplayMode.FULL
+        snapToEdge()
+        updateStatus(BallStatus.SUCCESS)
+    }
+
+    /**
+     * 重置隐藏计时器：5 秒无操作后进入侧边隐藏模式。
+     */
+    private fun resetHideTimer() {
+        handler.removeCallbacks(hideRunnable)
+        if (enableAutoHide) {
+            handler.postDelayed(hideRunnable, AUTO_HIDE_DELAY_MS)
+        }
+    }
+
+    /**
+     * 获取当前悬浮球的视觉宽度（像素）。
+     */
+    private fun getCurrentBallWidthPx(): Int {
+        val density = context.resources.displayMetrics.density
+        val dpValue = if (displayMode == BallDisplayMode.FULL) 36 else 10
+        return (dpValue * density).toInt()
+    }
+
+    /**
+     * 将悬浮球吸附到屏幕边缘。
+     */
+    private fun snapToEdge() {
+        val view = composeView ?: return
+        if (view.parent == null) return
+
+        val screenWidth = context.resources.displayMetrics.widthPixels
+        val ballWidth = getCurrentBallWidthPx()
+        val centerX = layoutParams.x + (ballWidth / 2)
+        isAtLeftEdge = centerX < (screenWidth / 2)
+
+        layoutParams.x = if (isAtLeftEdge) 0 else screenWidth - ballWidth
+        windowManager.updateViewLayout(view, layoutParams)
+    }
+
+    private inner class FloatingTouchListener : View.OnTouchListener {
+        private var initialX = 0
+        private var initialY = 0
+        private var initialTouchX = 0f
+        private var initialTouchY = 0f
+        private var isMoving = false
+
+        private val gestureDetector = GestureDetector(
+            context,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    if (displayMode == BallDisplayMode.HIDDEN_STRIP) {
+                        // 隐藏状态下点击只唤醒显示
+                        displayMode = BallDisplayMode.FULL
+                        snapToEdge()
+                        resetHideTimer()
+                        return true
+                    }
+                    // 仅在全显状态下触发点击功能
+                    onSingleClick?.invoke()
+                    resetHideTimer()
+                    return true
+                }
+
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    if (displayMode == BallDisplayMode.FULL) {
+                        onDoubleClick?.invoke()
+                        resetHideTimer()
+                    }
+                    return true
+                }
+
+                override fun onLongPress(e: MotionEvent) {
+                    if (displayMode == BallDisplayMode.HIDDEN_STRIP) {
+                        // 隐藏状态下长按也唤醒显示
+                        displayMode = BallDisplayMode.FULL
+                        snapToEdge()
+                        resetHideTimer()
+                        return
+                    }
+                    if (displayMode == BallDisplayMode.FULL && status == BallStatus.IDLE) {
+                        onLongClick?.invoke()
+                        resetHideTimer()
+                    }
+                }
+            })
+
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            if (gestureDetector.onTouchEvent(event)) return true
+
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = layoutParams.x
+                    initialY = layoutParams.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isMoving = false
+                    return true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+                    if (abs(dx) > 10 || abs(dy) > 10) {
+                        isMoving = true
+                        layoutParams.x = initialX + dx.toInt()
+                        layoutParams.y = initialY + dy.toInt()
+
+                        val screenWidth = context.resources.displayMetrics.widthPixels
+                        val ballWidth = getCurrentBallWidthPx()
+                        isAtLeftEdge = (layoutParams.x + (ballWidth / 2)) < (screenWidth / 2)
+
+                        val view = composeView
+                        if (view != null && view.parent != null) {
+                            windowManager.updateViewLayout(view, layoutParams)
+                        }
+                        handler.removeCallbacks(hideRunnable)
+                    }
+                    return true
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isMoving) {
+                        snapToEdge()
+                        resetHideTimer()
+                    }
+                    return true
+                }
+            }
+            return false
+        }
+    }
+}

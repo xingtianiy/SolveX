@@ -1,0 +1,58 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- AI 核心火花 (居中，代表智慧) -->
+    <path
+        android:fillColor="#4EDAD4"
+        android:pathData="M54,38L57.5,50.5L70,54L57.5,57.5L54,70L50.5,57.5L38,54L50.5,50.5Z" />
+
+    <!-- 扫描框边角 (象征屏幕捕捉/OCR) -->
+    <!-- 左上 -->
+    <path
+        android:pathData="M32,32L44,32M32,32L32,44"
+        android:strokeWidth="3.5"
+        android:strokeColor="#4EDAD4"
+        android:strokeLineCap="round" />
+    <!-- 右上 -->
+    <path
+        android:pathData="M76,32L64,32M76,32L76,44"
+        android:strokeWidth="3.5"
+        android:strokeColor="#4EDAD4"
+        android:strokeLineCap="round" />
+    <!-- 左下 -->
+    <path
+        android:pathData="M32,76L44,76M32,76L32,64"
+        android:strokeWidth="3.5"
+        android:strokeColor="#4EDAD4"
+        android:strokeLineCap="round" />
+    <!-- 右下 -->
+    <path
+        android:pathData="M76,76L64,76M76,76L76,64"
+        android:strokeWidth="3.5"
+        android:strokeColor="#4EDAD4"
+        android:strokeLineCap="round" />
+
+    <!-- 动态扫描线 (横跨核心) -->
+    <path
+        android:pathData="M28,54L80,54"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.6"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round" />
+
+    <!-- 数据粒子 (象征 LaTeX/公式解析) -->
+    <path
+        android:fillAlpha="0.4"
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,26m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:fillAlpha="0.4"
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,82m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+
+</vector>
+
+
