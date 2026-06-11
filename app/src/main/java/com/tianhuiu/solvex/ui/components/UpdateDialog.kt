@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.tianhuiu.solvex.data.models.DownloadStatus
+import com.tianhuiu.solvex.data.models.UpdateLevel
 import com.tianhuiu.solvex.data.models.VersionInfo
 
 /**
@@ -57,11 +58,13 @@ fun UpdateDialog(
     onDismiss: () -> Unit,
     onUpdate: () -> Unit
 ) {
+    val dismissible = info.isDismissible && downloadStatus !is DownloadStatus.Downloading
+
     Dialog(
-        onDismissRequest = { if (!info.forceUpdate && downloadStatus !is DownloadStatus.Downloading) onDismiss() },
+        onDismissRequest = { if (dismissible) onDismiss() },
         properties = DialogProperties(
-            dismissOnBackPress = !info.forceUpdate,
-            dismissOnClickOutside = !info.forceUpdate,
+            dismissOnBackPress = dismissible,
+            dismissOnClickOutside = dismissible,
             usePlatformDefaultWidth = false
         )
     ) {
@@ -118,7 +121,7 @@ fun UpdateDialog(
                         )
                     }
 
-                    if (!info.forceUpdate && downloadStatus !is DownloadStatus.Downloading) {
+                    if (dismissible) {
                         IconButton(
                             onClick = onDismiss,
                             modifier = Modifier.align(Alignment.TopEnd)
@@ -138,9 +141,9 @@ fun UpdateDialog(
                 ) {
                     InfoChip(text = "发布日期: ${info.releaseDate}")
                     InfoChip(text = "文件大小: ${info.apkSize}")
-                    if (info.forceUpdate) {
+                    if (info.updateLevel == UpdateLevel.CRITICAL) {
                         InfoChip(
-                            text = "强制更新",
+                            text = "重要更新",
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.error
                         )

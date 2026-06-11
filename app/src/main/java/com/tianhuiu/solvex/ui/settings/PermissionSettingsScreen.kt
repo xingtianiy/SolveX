@@ -1,37 +1,48 @@
 package com.tianhuiu.solvex.ui.settings
 
 import android.content.Intent
-import android.provider.Settings
 import android.os.PowerManager
-import android.os.Build
-import androidx.compose.foundation.layout.*
+import android.provider.Settings
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AccessibilityNew
+import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.AccessibilityNew
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.tianhuiu.solvex.service.SolveXAccessibilityService
+import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
-import com.tianhuiu.solvex.data.models.CaptureMode
-import androidx.core.net.toUri
-import com.tianhuiu.solvex.ui.MainViewModel
-import com.tianhuiu.solvex.service.SolveXAccessibilityService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -201,32 +212,7 @@ fun PermissionSettingsScreen(
             }
 
             item {
-                SettingsGroup(title = "悬浮球设置") {
-                    SettingsItem(
-                        label = "隐藏悬浮球",
-                        subLabel = "开启后，悬浮球在无操作时将自动缩回边缘",
-                        icon = Icons.Default.Layers,
-                        trailing = {
-                            Switch(
-                                checked = viewModel.permissions.enableAutoHideBall,
-                                onCheckedChange = {
-                                    viewModel.updatePermissions(
-                                        viewModel.permissions.copy(
-                                            enableAutoHideBall = it
-                                        )
-                                    )
-                                }
-                            )
-                        },
-                        onClick = {
-                            viewModel.updatePermissions(
-                                viewModel.permissions.copy(
-                                    enableAutoHideBall = !viewModel.permissions.enableAutoHideBall
-                                )
-                            )
-                        }
-                    )
-                }
+                Spacer(Modifier.height(32.dp))
             }
         }
     }

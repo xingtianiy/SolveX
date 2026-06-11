@@ -8,10 +8,12 @@ import androidx.core.content.FileProvider
 import com.tianhuiu.solvex.data.models.DownloadStatus
 import com.tianhuiu.solvex.data.models.VersionInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -29,37 +31,70 @@ class UpdateManager(
     private data class UpdateSource(val name: String, val url: String)
 
     private val versionSources = listOf(
-        UpdateSource("Gitee", "https://gitee.com/xingtianiy/SolveX/raw/main/version.json"),
+        UpdateSource(
+            "Gitee",
+            "https://gitee.com/xingtianiy/SolveX/raw/main/version.json"
+        ),
         UpdateSource(
             "Github",
             "https://raw.githubusercontent.com/xingtianiy/SolveX/main/version.json"
         ),
-        UpdateSource("JsDelivr", "https://cdn.jsdelivr.net/gh/xingtianiy/SolveX@main/version.json")
+        UpdateSource(
+            "JsDelivr",
+            "https://cdn.jsdelivr.net/gh/xingtianiy/SolveX@main/version.json"
+        )
     )
 
     /**
-     * 检测新版本
+     * 竞速检测新版本：并行请求所有源，取最快成功响应。
+     * @param etag 上次保存的 ETag，用于条件请求
+     * @return Pair<VersionInfo, String?> 版本信息和新的 ETag
      */
-    suspend fun checkUpdate(): Result<VersionInfo> = withContext(Dispatchers.IO) {
-        for (source in versionSources) {
-            fetchVersionInfo(source.url, source.name)
-                .onSuccess { return@withContext Result.success(it) }
-                .onFailure { error ->
-                    Log.w("UpdateManager", "源 ${source.name} 检测失败: ${error.message}")
+    suspend fun checkUpdate(etag: String? = null): Result<Pair<VersionInfo, String?>> =
+        withContext(Dispatchers.IO) {
+            val deferred = versionSources.map { source ->
+                async {
+                    fetchVersionInfo(source.url, source.name, etag)
                 }
+            }
+
+            // 收集首个成功结果
+            var lastError: Throwable? = null
+            for (d in deferred) {
+                d.await().fold(
+                    onSuccess = { return@withContext Result.success(it) },
+                    onFailure = { lastError = it }
+                )
+            }
+
+            Result.failure(lastError ?: Exception("更新源不可用"))
         }
 
-        Result.failure(Exception("更新源不可用"))
-    }
-
-    private fun fetchVersionInfo(url: String, sourceName: String): Result<VersionInfo> {
+    /**
+     * 请求单个源，支持 ETag 条件请求。
+     * @return Result<Pair<VersionInfo, String?>> 版本信息 + 新 ETag
+     */
+    private fun fetchVersionInfo(
+        url: String,
+        sourceName: String,
+        etag: String?
+    ): Result<Pair<VersionInfo, String?>> {
         return try {
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(url)
                 .header("User-Agent", "SolveX-Update-Checker")
                 .header("Cache-Control", "no-cache")
-                .build()
+            if (etag != null) {
+                requestBuilder.header("If-None-Match", etag)
+            }
+            val request = requestBuilder.build()
+
             client.newCall(request).execute().use { response ->
+                // 304 Not Modified — 版本未变化
+                if (response.code == 304) {
+                    return Result.failure(NotModifiedException(sourceName))
+                }
+
                 if (!response.isSuccessful) {
                     return Result.failure(Exception("[$sourceName] HTTP ${response.code}"))
                 }
@@ -67,7 +102,9 @@ class UpdateManager(
                     ?: return Result.failure(Exception("[$sourceName] 响应体为空"))
 
                 try {
-                    Result.success(json.decodeFromString<VersionInfo>(body))
+                    val info = json.decodeFromString<VersionInfo>(body)
+                    val newEtag = response.header("ETag")
+                    Result.success(info to newEtag)
                 } catch (e: Exception) {
                     Result.failure(Exception("[$sourceName] 数据解析失败"))
                 }
@@ -75,6 +112,24 @@ class UpdateManager(
         } catch (e: Exception) {
             Result.failure(Exception("[$sourceName] ${e.message ?: "网络异常"}"))
         }
+    }
+
+    /**
+     * 从缓存的 JSON 字符串解析版本信息。
+     */
+    fun parseCachedVersion(jsonStr: String): VersionInfo? {
+        return try {
+            json.decodeFromString<VersionInfo>(jsonStr)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 序列化版本信息为 JSON 字符串用于缓存。
+     */
+    fun encodeVersion(info: VersionInfo): String {
+        return json.encodeToString(info)
     }
 
     /**
@@ -193,4 +248,9 @@ class UpdateManager(
         }
         context.startActivity(intent)
     }
+
+    /**
+     * 版本未变化异常（304 响应）。
+     */
+    class NotModifiedException(source: String) : Exception("[$source] 版本未变化")
 }

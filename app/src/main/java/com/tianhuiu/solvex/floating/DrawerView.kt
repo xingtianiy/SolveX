@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +48,7 @@ import java.util.Locale
 fun DrawerView(
     item: HistoryItem?,
     showMetadata: Boolean,
+    autoScroll: Boolean = true,
     onClose: () -> Unit
 ) {
     Surface(
@@ -79,10 +81,18 @@ fun DrawerView(
                     CircularProgressIndicator()
                 }
             } else {
+                val scrollState = rememberScrollState()
+
+                LaunchedEffect(item.query, item.result, autoScroll) {
+                    if (autoScroll) {
+                        scrollState.animateScrollTo(scrollState.maxValue)
+                    }
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(scrollState)
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {

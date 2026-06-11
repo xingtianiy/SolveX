@@ -18,17 +18,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import androidx.navigation.NavType
-import com.tianhuiu.solvex.ui.home.HomeScreen
-import com.tianhuiu.solvex.ui.history.HistoryScreen
-import com.tianhuiu.solvex.ui.history.HistoryDetailScreen
-import com.tianhuiu.solvex.ui.settings.*
 import com.tianhuiu.solvex.ui.components.UpdateDialog
+import com.tianhuiu.solvex.ui.history.HistoryDetailScreen
+import com.tianhuiu.solvex.ui.history.HistoryScreen
+import com.tianhuiu.solvex.ui.home.HomeScreen
+import com.tianhuiu.solvex.ui.settings.AboutScreen
+import com.tianhuiu.solvex.ui.settings.AssistantEditScreen
+import com.tianhuiu.solvex.ui.settings.GeneralSettingsScreen
+import com.tianhuiu.solvex.ui.settings.ImportExportSettingsScreen
+import com.tianhuiu.solvex.ui.settings.ModelSettingsScreen
+import com.tianhuiu.solvex.ui.settings.PermissionSettingsScreen
+import com.tianhuiu.solvex.ui.settings.ProviderEditScreen
+import com.tianhuiu.solvex.ui.settings.QuickModeSettingsScreen
+import com.tianhuiu.solvex.ui.settings.SettingsScreen
+import com.tianhuiu.solvex.ui.settings.StudyModeSettingsScreen
+import com.tianhuiu.solvex.ui.settings.TutorialScreen
 
 /**
  * 屏幕导航定义。
@@ -104,11 +114,15 @@ fun SolveXApp(viewModel: MainViewModel) {
                 modifier = Modifier.padding(innerPadding)
             ) {
                 composable(Screen.Home.route) {
-                    HomeScreen(viewModel)
+                    HomeScreen(
+                        viewModel = viewModel,
+                        onNavigateToTutorial = { navController.navigate("settings/tutorial") }
+                    )
                 }
                 composable(Screen.History.route) {
                     HistoryScreen(
-                        onItemClick = { id -> navController.navigate("history/detail/$id") }
+                        onItemClick = { id -> navController.navigate("history/detail/$id") },
+                        autoScroll = viewModel.autoScrollContent
                     )
                 }
                 composable(

@@ -153,4 +153,5 @@ data class AppConfig(
     val selectedAssistantId: String? = null,
     val selectedEngine: EngineType = EngineType.VISION_ENGINE,
     val selectedMode: ProjectMode = ProjectMode.STUDY_MODE,
+    val autoScrollContent: Boolean = true,
 )

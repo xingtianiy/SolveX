@@ -1,21 +1,33 @@
 package com.tianhuiu.solvex.ui.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessibilityNew
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tianhuiu.solvex.data.models.CaptureMode
-import com.tianhuiu.solvex.data.models.DrawerSide
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
@@ -136,31 +148,45 @@ fun GeneralSettingsScreen(
             }
 
             item {
-                SettingsGroup(title = "抽屉设置") {
+                SettingsGroup(title = "显示设置") {
                     SettingsItem(
-                        label = "弹出位置",
-                        subLabel = "设置抽屉从屏幕哪一侧弹出",
-                        icon = Icons.Default.Layers,
+                        label = "跟随内容输出滚动",
+                        subLabel = "开启后将自动滚动跟随最新内容",
+                        icon = Icons.Default.Swipe,
                         trailing = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = if (viewModel.permissions.drawerSettings.side == DrawerSide.LEFT) "左侧" else "右侧",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Switch(
-                                    checked = viewModel.permissions.drawerSettings.side == DrawerSide.RIGHT,
-                                    onCheckedChange = { isRight ->
-                                        viewModel.updatePermissions(
-                                            viewModel.permissions.copy(
-                                                drawerSettings = viewModel.permissions.drawerSettings.copy(
-                                                    side = if (isRight) DrawerSide.RIGHT else DrawerSide.LEFT
-                                                )
-                                            )
+                            Switch(
+                                checked = viewModel.autoScrollContent,
+                                onCheckedChange = {
+                                    viewModel.updateAutoScrollContent(it)
+                                }
+                            )
+                        },
+                        onClick = {
+                            viewModel.updateAutoScrollContent(!viewModel.autoScrollContent)
+                        }
+                    )
+                    SettingsItem(
+                        label = "隐藏悬浮球",
+                        subLabel = "开启后悬浮球在无操作时将自动隐藏到屏幕边缘",
+                        icon = Icons.Default.Visibility,
+                        trailing = {
+                            Switch(
+                                checked = viewModel.permissions.enableAutoHideBall,
+                                onCheckedChange = {
+                                    viewModel.updatePermissions(
+                                        viewModel.permissions.copy(
+                                            enableAutoHideBall = it
                                         )
-                                    }
+                                    )
+                                }
+                            )
+                        },
+                        onClick = {
+                            viewModel.updatePermissions(
+                                viewModel.permissions.copy(
+                                    enableAutoHideBall = !viewModel.permissions.enableAutoHideBall
                                 )
-                            }
+                            )
                         }
                     )
                 }

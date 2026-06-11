@@ -75,7 +75,10 @@ import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: MainViewModel) {
+fun HomeScreen(
+    viewModel: MainViewModel,
+    onNavigateToTutorial: () -> Unit = {}
+) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val lifecycleOwner = LocalLifecycleOwner.current
     val inAppNotifications by viewModel.inAppNotifications.collectAsState(initial = emptyList())
@@ -158,7 +161,8 @@ fun HomeScreen(viewModel: MainViewModel) {
                         onRequestOverlayPermission = { viewModel.requestOverlayPermission() },
                         onRequestNotificationPermission = { viewModel.requestNotificationPermission() },
                         onRequestAccessibilityPermission = { viewModel.requestAccessibilityPermission() },
-                        onRequestShizukuPermission = { viewModel.requestShizukuPermission() }
+                        onRequestShizukuPermission = { viewModel.requestShizukuPermission() },
+                        onNavigateToTutorial = onNavigateToTutorial
                     )
                 }
             }
@@ -205,7 +209,8 @@ fun NotificationStack(
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRequestAccessibilityPermission: () -> Unit,
-    onRequestShizukuPermission: () -> Unit
+    onRequestShizukuPermission: () -> Unit,
+    onNavigateToTutorial: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -224,6 +229,8 @@ fun NotificationStack(
                             com.tianhuiu.solvex.data.models.PermissionType.SHIZUKU -> onRequestShizukuPermission()
                             else -> onRequestOverlayPermission()
                         }
+                    } else if (notification.type == com.tianhuiu.solvex.data.models.NotificationType.TUTORIAL) {
+                        onNavigateToTutorial()
                     }
                 }
             )
@@ -258,6 +265,13 @@ fun NotificationCard(
             contentColor = MaterialTheme.colorScheme.onSurface
             icon = Icons.Default.Info
             actionText = null
+        }
+
+        com.tianhuiu.solvex.data.models.NotificationType.TUTORIAL -> {
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            icon = Icons.Default.AutoFixHigh
+            actionText = "查看教程"
         }
     }
 

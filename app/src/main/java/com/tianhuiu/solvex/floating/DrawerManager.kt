@@ -51,6 +51,8 @@ class DrawerManager(
     private var liveQuery = ""
     private var liveResult = ""
 
+    private val autoScroll = mutableStateOf(true)
+
     private val layoutParams = WindowManager.LayoutParams().apply {
         type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -73,8 +75,11 @@ class DrawerManager(
         historyId: String,
         side: DrawerSide,
         widthPercent: Float,
-        showMetadata: Boolean = false
+        showMetadata: Boolean = false,
+        autoScrollEnabled: Boolean = true
     ) {
+
+        autoScroll.value = autoScrollEnabled
 
         if (composeView != null) {
             updateContent(historyId)
@@ -120,6 +125,7 @@ class DrawerManager(
                             DrawerView(
                                 item = displayItem,
                                 showMetadata = showMetadata,
+                                autoScroll = autoScroll.value,
                                 onClose = { hide() }
                             )
                         }

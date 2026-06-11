@@ -9,7 +9,8 @@ import java.util.UUID
 @Serializable
 enum class NotificationType(val priority: Int) {
     PERMISSION(10),    // 权限缺失（最高优先级）
-    READY_STATUS(5)    // 系统就绪状态
+    READY_STATUS(5),   // 系统就绪状态
+    TUTORIAL(3)        // 教程引导
 }
 
 /**

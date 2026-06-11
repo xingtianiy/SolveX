@@ -29,6 +29,8 @@ class AppNotificationManager {
         isAccessibilityEnabled: Boolean = true,
         isShizukuGranted: Boolean = false,
         captureMode: String = "system",
+        isServiceRunning: Boolean = false,
+        launchCount: Int = 0,
     ) {
         _notifications.update { _ ->
             val nextNotifications = mutableListOf<InAppNotification>()
@@ -90,8 +92,20 @@ class AppNotificationManager {
                     InAppNotification(
                         id = "STATUS_READY",
                         type = NotificationType.READY_STATUS,
-                        title = "SolveX 已就绪",
-                        content = "等待开启捕获"
+                        title = if (isServiceRunning) "SolveX 服务已启动" else "SolveX 已就绪",
+                        content = if (isServiceRunning) "AI 也会犯错，不要过度相信！" else "等待开启捕获"
+                    )
+                )
+            }
+
+            // 3. 教程引导通知（前 3 次启动）
+            if (launchCount in 1..3) {
+                nextNotifications.add(
+                    InAppNotification(
+                        id = "TUTORIAL_GUIDE",
+                        type = NotificationType.TUTORIAL,
+                        title = "新手指引",
+                        content = "建议查看使用教程，快速了解功能与操作"
                     )
                 )
             }

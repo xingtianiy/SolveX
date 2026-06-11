@@ -56,6 +56,7 @@ fun AboutScreen(viewModel: com.tianhuiu.solvex.ui.MainViewModel, onBack: () -> U
     val context = LocalContext.current
     var detailDialogContent by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var showSourceDialog by remember { mutableStateOf(false) }
     val isChecking by remember { androidx.compose.runtime.derivedStateOf { viewModel.isCheckingUpdate } }
 
     Scaffold(
@@ -133,16 +134,10 @@ fun AboutScreen(viewModel: com.tianhuiu.solvex.ui.MainViewModel, onBack: () -> U
 
                 AboutInfoItem(
                     label = "开源地址",
-                    subLabel = "查看项目 GitHub 源码仓库",
+                    subLabel = "查看项目源码仓库",
                     icon = Icons.Default.Code,
                     showArrow = true,
-                    onClick = {
-                        val intent = Intent(
-                            Intent.ACTION_VIEW,
-                            "https://github.com/xingtianiy/SolveX".toUri()
-                        )
-                        context.startActivity(intent)
-                    }
+                    onClick = { showSourceDialog = true }
                 )
 
                 AboutInfoItem(
@@ -180,6 +175,44 @@ fun AboutScreen(viewModel: com.tianhuiu.solvex.ui.MainViewModel, onBack: () -> U
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
+        }
+    }
+
+    // 开源地址选择弹窗
+    if (showSourceDialog) {
+        SolveXDialog(
+            onDismissRequest = { showSourceDialog = false },
+            title = "选择开源平台",
+            confirmButton = {
+                TextButton(onClick = { showSourceDialog = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            Column {
+                val onSourceClick: (String) -> Unit = { url ->
+                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                    showSourceDialog = false
+                }
+
+                SettingsItem(
+                    label = "GitHub",
+                    subLabel = "github.com/xingtianiy/SolveX",
+                    icon = Icons.Default.Code,
+                    onClick = {
+                        onSourceClick("https://github.com/xingtianiy/SolveX")
+                    }
+                )
+
+                SettingsItem(
+                    label = "Gitee",
+                    subLabel = "gitee.com/xingtianiy/SolveX",
+                    icon = Icons.Default.Code,
+                    onClick = {
+                        onSourceClick("https://gitee.com/xingtianiy/SolveX")
+                    }
+                )
+            }
         }
     }
 

@@ -22,6 +22,12 @@ class SettingsRepository(private val context: Context) {
     private val APP_CONFIG_KEY = stringPreferencesKey("app_config")
     private val LAST_UPDATE_CHECK_KEY =
         androidx.datastore.preferences.core.longPreferencesKey("last_update_check")
+    private val LAUNCH_COUNT_KEY =
+        androidx.datastore.preferences.core.intPreferencesKey("launch_count")
+    private val UPDATE_ETAG_KEY = stringPreferencesKey("update_etag")
+    private val CACHED_VERSION_KEY = stringPreferencesKey("cached_version")
+    private val CONSECUTIVE_NO_UPDATE_KEY =
+        androidx.datastore.preferences.core.intPreferencesKey("consecutive_no_update")
 
     val appConfigFlow: Flow<AppConfig> = context.dataStore.data.map { preferences ->
         val jsonStr = preferences[APP_CONFIG_KEY]
@@ -40,6 +46,29 @@ class SettingsRepository(private val context: Context) {
         preferences[LAST_UPDATE_CHECK_KEY] ?: 0L
     }
 
+    val launchCountFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[LAUNCH_COUNT_KEY] ?: 0
+    }
+
+    val updateEtagFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[UPDATE_ETAG_KEY]
+    }
+
+    val cachedVersionFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[CACHED_VERSION_KEY]
+    }
+
+    val consecutiveNoUpdateFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[CONSECUTIVE_NO_UPDATE_KEY] ?: 0
+    }
+
+    suspend fun incrementLaunchCount() {
+        context.dataStore.edit { preferences ->
+            val current = preferences[LAUNCH_COUNT_KEY] ?: 0
+            preferences[LAUNCH_COUNT_KEY] = current + 1
+        }
+    }
+
     suspend fun saveLastUpdateCheck(timestamp: Long) {
         context.dataStore.edit { preferences ->
             preferences[LAST_UPDATE_CHECK_KEY] = timestamp
@@ -49,6 +78,32 @@ class SettingsRepository(private val context: Context) {
     suspend fun saveAppConfig(config: AppConfig) {
         context.dataStore.edit { preferences ->
             preferences[APP_CONFIG_KEY] = json.encodeToString(config)
+        }
+    }
+
+    suspend fun saveUpdateEtag(etag: String?) {
+        context.dataStore.edit { preferences ->
+            if (etag != null) {
+                preferences[UPDATE_ETAG_KEY] = etag
+            } else {
+                preferences.remove(UPDATE_ETAG_KEY)
+            }
+        }
+    }
+
+    suspend fun saveCachedVersion(versionJson: String?) {
+        context.dataStore.edit { preferences ->
+            if (versionJson != null) {
+                preferences[CACHED_VERSION_KEY] = versionJson
+            } else {
+                preferences.remove(CACHED_VERSION_KEY)
+            }
+        }
+    }
+
+    suspend fun saveConsecutiveNoUpdate(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[CONSECUTIVE_NO_UPDATE_KEY] = count
         }
     }
 }

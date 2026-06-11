@@ -24,6 +24,7 @@ import com.tianhuiu.solvex.data.models.ProjectMode
 import com.tianhuiu.solvex.data.models.ProviderKind
 import com.tianhuiu.solvex.data.models.QuickModeConfig
 import com.tianhuiu.solvex.data.models.StudyModeConfig
+import com.tianhuiu.solvex.data.models.UpdateLevel
 import com.tianhuiu.solvex.data.models.VersionInfo
 import com.tianhuiu.solvex.network.UnifiedLLMClient
 import com.tianhuiu.solvex.service.MainService
@@ -83,6 +84,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var selectedMode by mutableStateOf(ProjectMode.STUDY_MODE)
         private set
 
+    var autoScrollContent by mutableStateOf(true)
+        private set
+
     var studyConfig by mutableStateOf(StudyModeConfig())
         private set
 
@@ -129,6 +133,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isCheckingUpdate by mutableStateOf(false)
         private set
 
+    var launchCount by mutableStateOf(0)
+        private set
+
     fun consumeDeepLink(): String? {
         val id = deepLinkHistoryId
         deepLinkHistoryId = null
@@ -169,45 +176,113 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     studyConfig = config.studyConfig
                     quickConfig = config.quickConfig
                     defaultProviderId = config.defaultProviderId
+                    autoScrollContent = config.autoScrollContent
                     checkPermissions()
                 }
             }
         }
 
-        // 自动检测更新（7天频率）
+        // 自适应更新检测
         viewModelScope.launch {
             val lastCheck = repository.lastUpdateCheckFlow.first()
+            val consecutiveNoUpdate = repository.consecutiveNoUpdateFlow.first()
             val now = System.currentTimeMillis()
-            if (now - lastCheck > TimeUnit.DAYS.toMillis(7)) {
+
+            // 自适应间隔：连续无更新则延长，发现过更新则缩短
+            val intervalDays = when {
+                consecutiveNoUpdate >= 3 -> 14L
+                updateInfo != null -> 1L
+                else -> 7L
+            }
+
+            if (now - lastCheck > TimeUnit.DAYS.toMillis(intervalDays)) {
                 checkForUpdates(manual = false)
             }
+        }
+
+        // 启动计数
+        viewModelScope.launch {
+            launchCount = repository.launchCountFlow.first()
+            repository.incrementLaunchCount()
         }
     }
 
     /**
-     * 检测更新。
+     * 检测更新：竞速请求 + ETag 条件请求 + 本地缓存兜底。
      */
     fun checkForUpdates(manual: Boolean = false) {
         viewModelScope.launch {
             if (manual) isCheckingUpdate = true
-            updateManager.checkUpdate()
-                .onSuccess { info ->
+
+            // critical 级别忽略频率限制
+            if (!manual && updateInfo?.updateLevel == UpdateLevel.CRITICAL) {
+                return@launch // 已展示 critical 弹窗，不重复检测
+            }
+
+            val savedEtag = repository.updateEtagFlow.first()
+
+            updateManager.checkUpdate(etag = savedEtag)
+                .onSuccess { (info, newEtag) ->
                     if (manual) isCheckingUpdate = false
                     repository.saveLastUpdateCheck(System.currentTimeMillis())
+
+                    // 保存新 ETag
+                    if (newEtag != null) {
+                        repository.saveUpdateEtag(newEtag)
+                    }
+
+                    // 缓存版本信息
+                    repository.saveCachedVersion(updateManager.encodeVersion(info))
 
                     // 比较 versionCode
                     if (info.versionCode > BuildConfig.VERSION_CODE) {
                         updateInfo = info
-                    } else if (manual) {
-                        NotificationUtils.showToast(
-                            getApplication(),
-                            "当前已是最新版本"
+                        repository.saveConsecutiveNoUpdate(0)
+                    } else {
+                        repository.saveConsecutiveNoUpdate(
+                            (repository.consecutiveNoUpdateFlow.first()) + 1
                         )
+                        if (manual) {
+                            NotificationUtils.showToast(
+                                getApplication(),
+                                "当前已是最新版本"
+                            )
+                        }
                     }
                 }
                 .onFailure { error ->
+                    if (manual) isCheckingUpdate = false
+
+                    // NotModifiedException 表示版本未变化（304）
+                    if (error is com.tianhuiu.solvex.utils.UpdateManager.NotModifiedException) {
+                        repository.saveLastUpdateCheck(System.currentTimeMillis())
+                        repository.saveConsecutiveNoUpdate(
+                            (repository.consecutiveNoUpdateFlow.first()) + 1
+                        )
+                        if (manual) {
+                            NotificationUtils.showToast(
+                                getApplication(),
+                                "当前已是最新版本"
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // 网络失败时尝试使用缓存版本
                     if (manual) {
-                        isCheckingUpdate = false
+                        val cachedJson = repository.cachedVersionFlow.first()
+                        if (cachedJson != null) {
+                            val cachedInfo = updateManager.parseCachedVersion(cachedJson)
+                            if (cachedInfo != null && cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
+                                updateInfo = cachedInfo
+                                NotificationUtils.showToast(
+                                    getApplication(),
+                                    "网络不可用，显示上次缓存的更新信息"
+                                )
+                                return@launch
+                            }
+                        }
+
                         val message = error.message ?: "未知错误"
                         NotificationUtils.showFeedback(
                             getApplication(),
@@ -235,7 +310,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun dismissUpdateDialog() {
-        if (updateInfo?.forceUpdate == true) return
+        if (!(updateInfo?.isDismissible == true)) return
+        // recommended 级别：推迟 24 小时后再提醒
+        if (updateInfo?.updateLevel == UpdateLevel.RECOMMENDED) {
+            viewModelScope.launch {
+                repository.saveLastUpdateCheck(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(6))
+            }
+        }
         updateInfo = null
         downloadStatus = DownloadStatus.Idle
     }
@@ -254,7 +335,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     defaultProviderId,
                     selectedAssistantId,
                     selectedEngine,
-                    selectedMode
+                    selectedMode,
+                    autoScrollContent
                 )
             )
         }
@@ -332,6 +414,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateDefaultProviderId(id: String?) {
         defaultProviderId = id
+        save()
+    }
+
+    fun updateAutoScrollContent(enabled: Boolean) {
+        autoScrollContent = enabled
         save()
     }
 
@@ -475,6 +562,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isAccessibilityEnabled = isAccessibilityEnabled,
             isShizukuGranted = isShizukuPermissionGranted,
             captureMode = permissions.captureMode,
+            isServiceRunning = isServiceRunning,
+            launchCount = launchCount,
         )
     }
 

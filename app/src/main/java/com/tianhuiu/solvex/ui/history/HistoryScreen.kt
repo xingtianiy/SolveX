@@ -80,6 +80,7 @@ import java.util.Locale
 fun HistoryScreen(
     viewModel: HistoryViewModel = viewModel(),
     onItemClick: (String) -> Unit,
+    autoScroll: Boolean = true,
 ) {
     val historyItems by viewModel.historyItems.collectAsState()
     val totalCount by viewModel.totalCount.collectAsState()
@@ -103,11 +104,19 @@ fun HistoryScreen(
 
     val listState = rememberLazyListState()
 
-    // 自动置顶逻辑：仅当有新任务产生（总数增加）时滚动到顶部
+    // 自动置顶/滚动逻辑：仅当有新任务产生（总数增加）时滚动
     var prevTotalCount by remember { mutableIntStateOf(totalCount) }
-    LaunchedEffect(totalCount) {
+    LaunchedEffect(totalCount, autoScroll) {
         if (totalCount > prevTotalCount) {
-            listState.animateScrollToItem(0)
+            if (autoScroll) {
+                // 跟随内容：滚动到最新项（底部）
+                val lastIndex = filteredItems.size - 1
+                if (lastIndex >= 0) {
+                    listState.animateScrollToItem(lastIndex)
+                }
+            } else {
+                listState.animateScrollToItem(0)
+            }
         }
         prevTotalCount = totalCount
     }

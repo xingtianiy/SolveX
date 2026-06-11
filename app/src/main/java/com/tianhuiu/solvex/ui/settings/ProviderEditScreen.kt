@@ -125,9 +125,9 @@ fun ProviderEditScreen(
             availableModels = previewModels.ifEmpty {
                 existingProvider?.availableModels ?: emptyList()
             },
-            defaultOcrModel = defaultOcrModel,
-            defaultTextModel = defaultTextModel,
-            defaultVisionModel = defaultVisionModel
+            defaultOcrModel = defaultOcrModel.trim(),
+            defaultTextModel = defaultTextModel.trim(),
+            defaultVisionModel = defaultVisionModel.trim()
         )
     }
 

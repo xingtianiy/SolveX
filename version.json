@@ -1,14 +1,12 @@
 {
-  "versionCode": 2,
-  "versionName": "0.0.2-alpha",
+  "versionCode": 3,
+  "versionName": "0.0.3-alpha",
   "releaseDate": "2026-06-11",
-  "forceUpdate": false,
+  "level": "critical",
   "apkSize": "16 MB",
   "updateLog": [
-    "新增常规模式裁剪功能",
-    "优化详情页在主线程解码问题",
-    "优化性能修复内存泄漏、卡顿等问题"
+    "优化多项用户体验"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.2-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.2-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.3-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.3-alpha/app-release.apk"
 }

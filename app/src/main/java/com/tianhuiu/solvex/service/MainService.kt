@@ -112,7 +112,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 historyId = id,
                                 side = config.permissions.drawerSettings.side,
                                 widthPercent = config.permissions.drawerSettings.widthPercent,
-                                showMetadata = false
+                                showMetadata = false,
+                                autoScrollEnabled = config.autoScrollContent
                             )
                         }
                     }
