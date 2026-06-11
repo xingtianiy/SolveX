@@ -2,17 +2,10 @@ package com.tianhuiu.solvex.floating
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.PixelFormat
-import android.os.Build
 import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.tianhuiu.solvex.floating.OverlayParams.setupLifecycleOwners
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -24,17 +17,9 @@ class CropManager(private val context: Context) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var composeView: ComposeView? = null
 
-    private val layoutParams = WindowManager.LayoutParams().apply {
-        type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-        format = PixelFormat.TRANSLUCENT
-        flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+    private val layoutParams = OverlayParams.createBaseParams(
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+    ).apply {
         width = WindowManager.LayoutParams.MATCH_PARENT
         height = WindowManager.LayoutParams.MATCH_PARENT
     }
@@ -60,9 +45,7 @@ class CropManager(private val context: Context) {
     ) {
         hide()
         composeView = ComposeView(context).apply {
-            (context as? LifecycleOwner)?.let { setViewTreeLifecycleOwner(it) }
-            (context as? ViewModelStoreOwner)?.let { setViewTreeViewModelStoreOwner(it) }
-            (context as? SavedStateRegistryOwner)?.let { setViewTreeSavedStateRegistryOwner(it) }
+            setupLifecycleOwners(context)
             setContent {
                 MaterialTheme {
                     CropView(

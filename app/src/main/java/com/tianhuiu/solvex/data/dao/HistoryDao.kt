@@ -1,7 +1,6 @@
 package com.tianhuiu.solvex.data.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -13,17 +12,11 @@ interface HistoryDao {
     @Query("SELECT * FROM history_items ORDER BY timestamp DESC")
     fun getAllHistoryItems(): Flow<List<HistoryItem>>
 
-    @Query("SELECT * FROM history_items ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
-    suspend fun getHistoryItemsPaged(limit: Int, offset: Int): List<HistoryItem>
-
     @Query("SELECT COUNT(*) FROM history_items")
     fun getHistoryCount(): Flow<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHistoryItem(item: HistoryItem)
-
-    @Delete
-    suspend fun deleteHistoryItem(item: HistoryItem)
 
     @Query("DELETE FROM history_items WHERE id = :id")
     suspend fun deleteHistoryItemById(id: String)
@@ -34,12 +27,10 @@ interface HistoryDao {
     @Query("SELECT * FROM history_items WHERE id = :id")
     fun getHistoryItemByIdFlow(id: String): Flow<HistoryItem?>
 
-    @Query("UPDATE history_items SET `status` = :status, `query` = :query, `result` = :result WHERE `status` = :processingStatus")
+    @Query("UPDATE history_items SET `status` = :status WHERE `status` = :processingStatus")
     suspend fun markProcessingAsCancelled(
         processingStatus: String,
-        status: String,
-        query: String,
-        result: String
+        status: String
     )
 
     @Query("DELETE FROM history_items")

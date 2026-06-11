@@ -5,9 +5,6 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
-/**
- * 历史记录的解析状态。
- */
 @Serializable
 enum class AnalysisStatus(val displayName: String) {
     SUCCESS("已完成"),
@@ -16,10 +13,6 @@ enum class AnalysisStatus(val displayName: String) {
     PROCESSING("处理中"),
 }
 
-/**
- * 历史记录条目数据模型。
- */
-@Serializable
 @Entity(tableName = "history_items")
 data class HistoryItem(
     @PrimaryKey
@@ -30,6 +23,7 @@ data class HistoryItem(
     val query: String,
     val result: String,
     val imagePath: String? = null,
+    val imagePaths: List<String> = emptyList(),
     val mode: String? = null,
     val assistantName: String? = null,
     val providerName: String? = null,

@@ -2,8 +2,6 @@ package com.tianhuiu.solvex.floating
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.PixelFormat
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.GestureDetector
@@ -15,17 +13,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.tianhuiu.solvex.floating.OverlayParams.setupLifecycleOwners
 import kotlin.math.abs
 
-/**
- * 悬浮球管理器。
- */
 class FloatingBallManager(private val context: Context) {
 
     companion object {
@@ -34,17 +24,9 @@ class FloatingBallManager(private val context: Context) {
     }
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val layoutParams = WindowManager.LayoutParams().apply {
-        type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-        format = PixelFormat.TRANSLUCENT
-        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+    private val layoutParams = OverlayParams.createBaseParams(
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+    ).apply {
         width = WindowManager.LayoutParams.WRAP_CONTENT
         height = WindowManager.LayoutParams.WRAP_CONTENT
         gravity = Gravity.TOP or Gravity.START
@@ -53,6 +35,7 @@ class FloatingBallManager(private val context: Context) {
     }
 
     private var composeView: ComposeView? = null
+    private var isTempHidden = false
 
     private val _enableAutoHide = mutableStateOf(value = true)
     var enableAutoHide: Boolean
@@ -73,6 +56,9 @@ class FloatingBallManager(private val context: Context) {
     private var displayMode by mutableStateOf(BallDisplayMode.FULL)
     private var isAtLeftEdge by mutableStateOf(value = true)
     private var ballText by mutableStateOf<String?>(null)
+    private var badgeCount by mutableStateOf(0)
+    private var isMultiImageMode by mutableStateOf(false)
+    private var ballSizeDp by mutableStateOf(40f)
 
     private val handler = Handler(Looper.getMainLooper())
     private val hideRunnable = Runnable {
@@ -80,14 +66,21 @@ class FloatingBallManager(private val context: Context) {
         snapToEdge()
     }
 
+    private val statusResetRunnable = Runnable {
+        status = BallStatus.IDLE
+        ballText = null
+        if (enableAutoHide) {
+            displayMode = BallDisplayMode.HIDDEN_STRIP
+            snapToEdge()
+        }
+    }
+
     var onSingleClick: (() -> Unit)? = null
     var onDoubleClick: (() -> Unit)? = null
     var onLongClick: (() -> Unit)? = null
 
-    /**
-     * 显示悬浮球。
-     */
     fun show() {
+        if (isTempHidden) return
         val existing = composeView
         if ((existing != null) && (existing.parent != null)) return
 
@@ -98,16 +91,17 @@ class FloatingBallManager(private val context: Context) {
         }
 
         composeView = ComposeView(context).apply {
-            (context as? LifecycleOwner)?.let { setViewTreeLifecycleOwner(it) }
-            (context as? ViewModelStoreOwner)?.let { setViewTreeViewModelStoreOwner(it) }
-            (context as? SavedStateRegistryOwner)?.let { setViewTreeSavedStateRegistryOwner(it) }
+            setupLifecycleOwners(context)
 
             setContent {
                 FloatingBallView(
                     status = status,
                     displayMode = displayMode,
                     isAtLeftEdge = isAtLeftEdge,
-                    ballText = ballText
+                    ballText = ballText,
+                    badgeCount = badgeCount,
+                    isMultiImageMode = isMultiImageMode,
+                    ballSizeDp = ballSizeDp
                 )
             }
 
@@ -118,11 +112,9 @@ class FloatingBallManager(private val context: Context) {
         resetHideTimer()
     }
 
-    /**
-     * 隐藏悬浮球。
-     */
     fun hide() {
         handler.removeCallbacks(hideRunnable)
+        isTempHidden = false
         handler.post {
             composeView?.let {
                 if (it.parent != null) {
@@ -136,11 +128,9 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 截屏前临时隐藏。
-     */
     fun tempHide() {
         handler.removeCallbacks(hideRunnable)
+        isTempHidden = true
         handler.post {
             composeView?.let {
                 if (it.parent != null) {
@@ -153,9 +143,6 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 恢复临时隐藏的悬浮球。
-     */
     fun restore() {
         handler.post {
             composeView?.let {
@@ -166,44 +153,60 @@ class FloatingBallManager(private val context: Context) {
                     }
                 }
             }
-            resetHideTimer()
         }
+        isTempHidden = false
+        resetHideTimer()
     }
 
-    /**
-     * 更新悬浮球状态。
-     */
     fun updateStatus(newStatus: BallStatus) {
         status = newStatus
         if ((newStatus == BallStatus.SUCCESS) || (newStatus == BallStatus.ERROR)) {
             handler.removeCallbacks(hideRunnable)
-            // 结果显示 5 秒后执行清理
-            handler.postDelayed({
-                status = BallStatus.IDLE
-                ballText = null
-                if (enableAutoHide) {
-                    displayMode = BallDisplayMode.HIDDEN_STRIP
-                    snapToEdge()
-                }
-            }, AUTO_HIDE_DELAY_MS)
+            handler.removeCallbacks(statusResetRunnable)
+            handler.postDelayed(statusResetRunnable, AUTO_HIDE_DELAY_MS)
         } else {
+            handler.removeCallbacks(statusResetRunnable)
             resetHideTimer()
         }
     }
 
-    /**
-     * 在悬浮球上显示文字。
-     */
-    fun showText(text: String) {
+    fun showText(text: String, persistent: Boolean = false) {
         ballText = text
         displayMode = BallDisplayMode.FULL
-        snapToEdge()
+        handler.post { snapToEdge() }
+        if (persistent) {
+            handler.removeCallbacks(statusResetRunnable)
+        }
         updateStatus(BallStatus.SUCCESS)
     }
 
-    /**
-     * 重置自动隐藏计时器。
-     */
+    fun enterMultiImageMode() {
+        isMultiImageMode = true
+        badgeCount = 0
+        displayMode = BallDisplayMode.FULL
+        status = BallStatus.MULTI_IMAGE
+        handler.removeCallbacks(hideRunnable)
+        snapToEdge()
+    }
+
+    fun updateBadgeCount(count: Int) {
+        badgeCount = count
+    }
+
+    fun exitMultiImageMode() {
+        isMultiImageMode = false
+        badgeCount = 0
+        status = BallStatus.IDLE
+        if (enableAutoHide) {
+            resetHideTimer()
+        }
+    }
+
+    fun setBallSize(sizeDp: Float) {
+        ballSizeDp = sizeDp
+        snapToEdge()
+    }
+
     private fun resetHideTimer() {
         handler.removeCallbacks(hideRunnable)
         if (enableAutoHide) {
@@ -211,18 +214,12 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 获取悬浮球视觉宽度（像素）。
-     */
     private fun getCurrentBallWidthPx(): Int {
         val density = context.resources.displayMetrics.density
-        val dpValue = if (displayMode == BallDisplayMode.FULL) 36 else 10
+        val dpValue = if (displayMode == BallDisplayMode.FULL) ballSizeDp * 0.9f else ballSizeDp * 0.25f
         return (dpValue * density).toInt()
     }
 
-    /**
-     * 将悬浮球吸附到屏幕边缘。
-     */
     private fun snapToEdge() {
         val view = composeView ?: return
         if (view.parent == null) return
@@ -274,7 +271,7 @@ class FloatingBallManager(private val context: Context) {
                         resetHideTimer()
                         return
                     }
-                    if (displayMode == BallDisplayMode.FULL && status == BallStatus.IDLE) {
+                    if (displayMode == BallDisplayMode.FULL && (status == BallStatus.IDLE || status == BallStatus.MULTI_IMAGE)) {
                         onLongClick?.invoke()
                         resetHideTimer()
                     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoMode
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Description
@@ -62,6 +63,12 @@ fun SettingsScreen(navController: NavController) {
                         subLabel = "配置自动化工作流",
                         icon = Icons.Default.AutoMode,
                         onClick = { navController.navigate("settings/quick") }
+                    )
+                    SettingsItem(
+                        label = "多图模式",
+                        subLabel = "配置多图模式模型和截图行为",
+                        icon = Icons.Default.Add,
+                        onClick = { navController.navigate("settings/multi_image") }
                     )
                 }
             }

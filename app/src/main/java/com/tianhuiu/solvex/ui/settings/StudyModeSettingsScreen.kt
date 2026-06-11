@@ -151,6 +151,22 @@ fun StudyModeSettingsScreen(
                         }
                     )
                     SettingsItem(
+                        label = "实时渲染显示截图",
+                        subLabel = "开启后在抽屉中显示当前截图画面",
+                        icon = Icons.Default.Image,
+                        trailing = {
+                            Switch(
+                                checked = config.showScreenshotInRealtime,
+                                onCheckedChange = {
+                                    viewModel.updateStudyConfig(config.copy(showScreenshotInRealtime = it))
+                                }
+                            )
+                        },
+                        onClick = {
+                            viewModel.updateStudyConfig(config.copy(showScreenshotInRealtime = !config.showScreenshotInRealtime))
+                        }
+                    )
+                    SettingsItem(
                         label = "自动弹出抽屉",
                         subLabel = "开始解析后自动打开侧边抽屉实时展示结果",
                         icon = Icons.AutoMirrored.Filled.ViewSidebar,
@@ -161,6 +177,9 @@ fun StudyModeSettingsScreen(
                                     viewModel.updateStudyConfig(config.copy(autoOpenDrawer = it))
                                 }
                             )
+                        },
+                        onClick = {
+                            viewModel.updateStudyConfig(config.copy(autoOpenDrawer = !config.autoOpenDrawer))
                         }
                     )
                 }

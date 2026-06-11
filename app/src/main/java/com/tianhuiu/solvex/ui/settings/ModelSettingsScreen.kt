@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.tianhuiu.solvex.data.models.ModelProvider
 import com.tianhuiu.solvex.ui.ConnectivityTestState
 import com.tianhuiu.solvex.ui.MainViewModel
+
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
@@ -121,7 +122,7 @@ fun ModelSettingsScreen(
                                                 val result = viewModel.testConnectivity(provider)
                                                 when (result) {
                                                     is ConnectivityTestState.Success ->
-                                                        com.tianhuiu.solvex.utils.NotificationUtils.showFeedback(
+                                                        com.tianhuiu.solvex.utils.NotificationHelper.showFeedback(
                                                             context,
                                                             userMessage = "连接成功",
                                                             detailedLog = "${provider.name}: 连通成功 (${result.modelCount} 个模型)",
@@ -129,7 +130,7 @@ fun ModelSettingsScreen(
                                                         )
 
                                                     is ConnectivityTestState.Failure ->
-                                                        com.tianhuiu.solvex.utils.NotificationUtils.showFeedback(
+                                                        com.tianhuiu.solvex.utils.NotificationHelper.showFeedback(
                                                             context,
                                                             userMessage = "连接失败",
                                                             detailedLog = "${provider.name}: ${result.message}"
@@ -145,7 +146,7 @@ fun ModelSettingsScreen(
                                                 CircularProgressIndicator(
                                                     modifier = Modifier.size(
                                                         20.dp
-                                                    ), strokeWidth = 2.dp
+                                                    )
                                                 )
 
                                             else ->
@@ -270,8 +271,7 @@ fun ModelPreviewDialog(
         trailingTitleAction = {
             if (isFetching) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
+                    modifier = Modifier.size(24.dp)
                 )
             } else {
                 IconButton(onClick = onRefresh) {
@@ -343,7 +343,7 @@ fun ModelPreviewDialog(
                                                         )
                                                     )
                                                 )
-                                                com.tianhuiu.solvex.utils.NotificationUtils.showToast(
+                                                com.tianhuiu.solvex.utils.NotificationHelper.showToast(
                                                     context,
                                                     "已复制: $model"
                                                 )
@@ -359,7 +359,7 @@ fun ModelPreviewDialog(
                                                         )
                                                     )
                                                 )
-                                                com.tianhuiu.solvex.utils.NotificationUtils.showToast(
+                                                com.tianhuiu.solvex.utils.NotificationHelper.showToast(
                                                     context,
                                                     "已复制: $model"
                                                 )

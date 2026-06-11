@@ -15,10 +15,8 @@ import okhttp3.OkHttpClient
  * 模型适配器接口：所有 LLM 提供商适配器需实现此接口。
  */
 interface ProviderAdapter {
-    /** 发起流式推理请求，返回 LLM 事件流 */
     suspend fun stream(request: StreamRequest): Flow<LlmEvent>
 
-    /** 获取可用模型列表 */
     suspend fun fetchModels(provider: ModelProvider): List<String>
 }
 
@@ -31,7 +29,7 @@ class UnifiedLLMClient(
 ) {
     private val sseClient = SseStreamClient(client)
 
-    private val adapters = mutableMapOf<ProviderKind, ProviderAdapter>()
+    private val adapters = java.util.concurrent.ConcurrentHashMap<ProviderKind, ProviderAdapter>()
 
     private fun getAdapter(kind: ProviderKind): ProviderAdapter = adapters.getOrPut(kind) {
         when (kind) {
@@ -42,9 +40,6 @@ class UnifiedLLMClient(
         }
     }
 
-    /**
-     * 发起流式推理请求，根据 provider.type 路由到对应适配器。
-     */
     suspend fun stream(
         provider: ModelProvider,
         model: String,
@@ -68,9 +63,6 @@ class UnifiedLLMClient(
         )
     }
 
-    /**
-     * 获取指定提供商的可用模型列表。
-     */
     suspend fun fetchModels(provider: ModelProvider): List<String> {
         val adapter = getAdapter(provider.type)
         return try {

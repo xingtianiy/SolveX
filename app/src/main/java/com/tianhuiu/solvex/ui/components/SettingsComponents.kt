@@ -246,8 +246,7 @@ fun ModelSelectorItem(
 
                             if (isRefreshing) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
+                                    modifier = Modifier.size(24.dp)
                                 )
                             } else {
                                 IconButton(onClick = {

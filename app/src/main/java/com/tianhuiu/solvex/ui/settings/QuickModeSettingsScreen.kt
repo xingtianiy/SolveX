@@ -163,6 +163,25 @@ fun QuickModeSettingsScreen(
                                     viewModel.updateQuickConfig(config.copy(autoOpenDrawer = it))
                                 }
                             )
+                        },
+                        onClick = {
+                            viewModel.updateQuickConfig(config.copy(autoOpenDrawer = !config.autoOpenDrawer))
+                        }
+                    )
+                    SettingsItem(
+                        label = "实时渲染显示截图",
+                        subLabel = "开启后在抽屉中显示当前截图画面",
+                        icon = Icons.Default.Image,
+                        trailing = {
+                            Switch(
+                                checked = config.showScreenshotInRealtime,
+                                onCheckedChange = {
+                                    viewModel.updateQuickConfig(config.copy(showScreenshotInRealtime = it))
+                                }
+                            )
+                        },
+                        onClick = {
+                            viewModel.updateQuickConfig(config.copy(showScreenshotInRealtime = !config.showScreenshotInRealtime))
                         }
                     )
                 }

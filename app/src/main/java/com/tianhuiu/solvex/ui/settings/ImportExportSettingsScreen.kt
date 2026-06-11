@@ -20,7 +20,7 @@ import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.SolveXDialog
-import com.tianhuiu.solvex.utils.NotificationUtils
+import com.tianhuiu.solvex.utils.NotificationHelper
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -34,16 +34,16 @@ fun ImportExportSettingsScreen(
     var showResetDialog by remember { mutableStateOf(false) }
     var exportContent by remember { mutableStateOf("") }
 
-    // Import confirmation state
+    // 导入确认对话框状态
     var showImportDialog by remember { mutableStateOf(false) }
     var pendingImportData by remember { mutableStateOf<com.tianhuiu.solvex.ui.ExportData?>(null) }
 
-    // Selection state
+    // 选择状态
     val selectedProviders = remember { mutableStateMapOf<String, Boolean>() }
     val includeApiKeyMap = remember { mutableStateMapOf<String, Boolean>() }
     val selectedAssistants = remember { mutableStateMapOf<String, Boolean>() }
 
-    // Initialize selection state
+    // 初始化选择状态
     LaunchedEffect(viewModel.providers, viewModel.assistants) {
         viewModel.providers.forEach {
             if (it.id !in selectedProviders) selectedProviders[it.id] = true
@@ -54,7 +54,7 @@ fun ImportExportSettingsScreen(
         }
     }
 
-    // Master Checkbox Logic
+    // 全选/全不选逻辑
     val allProvidersSelected =
         viewModel.providers.isNotEmpty() && viewModel.providers.all { selectedProviders[it.id] == true }
     val allAssistantsSelected =
@@ -68,9 +68,9 @@ fun ImportExportSettingsScreen(
                 context.contentResolver.openOutputStream(it)?.use { outputStream ->
                     outputStream.write(exportContent.toByteArray())
                 }
-                NotificationUtils.showToast(context, "配置已成功保存")
+                NotificationHelper.showToast(context, "配置已成功保存")
             } catch (e: Exception) {
-                NotificationUtils.showFeedback(
+                NotificationHelper.showFeedback(
                     context,
                     userMessage = "导出失败",
                     detailedLog = "Export failed: ${e.message}",
@@ -93,7 +93,7 @@ fun ImportExportSettingsScreen(
                         pendingImportData = data
                         showImportDialog = true
                     } else {
-                        NotificationUtils.showFeedback(
+                        NotificationHelper.showFeedback(
                             context,
                             userMessage = "文件格式错误",
                             detailedLog = "Selected file is not a valid configuration format"
@@ -101,7 +101,7 @@ fun ImportExportSettingsScreen(
                     }
                 }
             } catch (e: Exception) {
-                NotificationUtils.showFeedback(
+                NotificationHelper.showFeedback(
                     context,
                     userMessage = "读取失败",
                     detailedLog = "Read failed: ${e.message}",
@@ -269,7 +269,7 @@ fun ImportExportSettingsScreen(
                     onClick = {
                         pendingImportData?.let {
                             viewModel.importConfig(it)
-                            NotificationUtils.showToast(
+                            NotificationHelper.showToast(
                                 context,
                                 "导入成功"
                             )

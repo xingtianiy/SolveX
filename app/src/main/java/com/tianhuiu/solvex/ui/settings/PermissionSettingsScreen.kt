@@ -39,7 +39,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.tianhuiu.solvex.service.SolveXAccessibilityService
+import com.tianhuiu.solvex.utils.SystemUtils
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
@@ -60,7 +60,7 @@ fun PermissionSettingsScreen(
         mutableStateOf(Settings.canDrawOverlays(context))
     }
     var isAccessibilityEnabled by remember {
-        mutableStateOf(isAccessibilityServiceEnabled(context))
+        mutableStateOf(SystemUtils.isAccessibilityServiceEnabled(context))
     }
     var isBatteryOptimized by remember {
         val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
@@ -73,7 +73,7 @@ fun PermissionSettingsScreen(
                 isNotificationEnabled =
                     NotificationManagerCompat.from(context).areNotificationsEnabled()
                 isSystemAlertEnabled = Settings.canDrawOverlays(context)
-                isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+                isAccessibilityEnabled = SystemUtils.isAccessibilityServiceEnabled(context)
                 isBatteryOptimized =
                     !(context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager)
                         .isIgnoringBatteryOptimizations(context.packageName)
@@ -216,13 +216,4 @@ fun PermissionSettingsScreen(
             }
         }
     }
-}
-
-private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
-    val serviceName = "${context.packageName}/${SolveXAccessibilityService::class.java.name}"
-    val enabledServices = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    return enabledServices.split(':').any { it == serviceName }
 }

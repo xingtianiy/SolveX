@@ -1,5 +1,6 @@
 package com.tianhuiu.solvex.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,10 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.NavigateBefore
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -165,6 +171,69 @@ fun SolveXConfirmDialog(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * 合并模式截图翻页覆盖层：上一页/下一页按钮与页码指示器。
+ * HistoryDetailScreen 与 DrawerView 共用此组件。
+ */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.MergeModeScreenshotOverlay(
+    currentImageIndex: Int,
+    totalImages: Int,
+    onPrevImage: () -> Unit,
+    onNextImage: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(
+        onClick = onPrevImage,
+        enabled = currentImageIndex > 0,
+        modifier = Modifier
+            .align(Alignment.CenterStart)
+            .padding(4.dp)
+            .size(32.dp)
+            .background(
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                CircleShape
+            )
+    ) {
+        Icon(
+            Icons.AutoMirrored.Filled.NavigateBefore,
+            contentDescription = "上一张",
+            modifier = Modifier.size(18.dp)
+        )
+    }
+    IconButton(
+        onClick = onNextImage,
+        enabled = currentImageIndex < totalImages - 1,
+        modifier = Modifier
+            .align(Alignment.CenterEnd)
+            .padding(4.dp)
+            .size(32.dp)
+            .background(
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                CircleShape
+            )
+    ) {
+        Icon(
+            Icons.AutoMirrored.Filled.NavigateNext,
+            contentDescription = "下一张",
+            modifier = Modifier.size(18.dp)
+        )
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(4.dp)
+    ) {
+        Text(
+            "${currentImageIndex + 1}/$totalImages",
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
         )
     }
 }

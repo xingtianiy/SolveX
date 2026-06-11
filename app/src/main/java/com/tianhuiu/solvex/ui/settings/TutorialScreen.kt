@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.NavigateBefore
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,6 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tianhuiu.solvex.ui.components.MathView
 import com.tianhuiu.solvex.utils.FileUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 使用教程页面。
@@ -50,8 +54,10 @@ fun TutorialScreen(onBack: () -> Unit) {
     )
 
     var currentPage by remember { mutableIntStateOf(0) }
-    val tutorialContent = remember(currentPage) {
-        FileUtils.readAssetFile(context, tutorialFileNames[currentPage])
+    val tutorialContent by produceState<String?>(null, currentPage) {
+        value = withContext(Dispatchers.IO) {
+            FileUtils.readAssetFile(context, tutorialFileNames[currentPage])
+        }
     }
 
     Scaffold(
@@ -114,16 +120,21 @@ fun TutorialScreen(onBack: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
+            contentAlignment = Alignment.Center
         ) {
-            MathView(
-                text = tutorialContent,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                lineHeight = 2.0f,
-                forceMarkdown = true
-            )
+            if (tutorialContent != null) {
+                MathView(
+                    text = tutorialContent!!,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    lineHeight = 2.0f,
+                    forceMarkdown = true
+                )
+            } else {
+                CircularProgressIndicator()
+            }
         }
     }
 }

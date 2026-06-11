@@ -2,13 +2,11 @@ package com.tianhuiu.solvex.floating
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -20,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
@@ -40,33 +39,29 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
-/**
- * 悬浮球视图：负责渲染不同状态、答案内容。支持超长文本自动横向滚动。
- */
-/**
- * 悬浮球组件 UI 实现。
- */
 @Composable
 fun FloatingBallView(
     status: BallStatus,
     displayMode: BallDisplayMode,
     isAtLeftEdge: Boolean,
-    ballText: String? = null
+    ballText: String? = null,
+    badgeCount: Int = 0,
+    isMultiImageMode: Boolean = false,
+    ballSizeDp: Float = 40f,
 ) {
-    // 基础尺寸：40dp (球体) / 14dp (侧边条)
-    val baseSize = if (displayMode == BallDisplayMode.FULL) 40.dp else 24.dp
-    val baseWidth = if (displayMode == BallDisplayMode.FULL) 40.dp else 14.dp
+    val baseSize = if (displayMode == BallDisplayMode.FULL) ballSizeDp.dp else (ballSizeDp * 0.6f).dp
+    val baseWidth = if (displayMode == BallDisplayMode.FULL) ballSizeDp.dp else (ballSizeDp * 0.35f).dp
 
     val targetHeight = if (displayMode == BallDisplayMode.FULL) baseSize else baseSize * 3
     val size by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+        animationSpec = tween(200),
         label = "size"
     )
 
     val width by animateDpAsState(
         targetValue = baseWidth,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+        animationSpec = tween(200),
         label = "width"
     )
 
@@ -77,7 +72,7 @@ fun FloatingBallView(
 
     val rotation: Float = if (status == BallStatus.RUNNING) {
         val rotationTransition = rememberInfiniteTransition(label = "rotation")
-        val animatedFloat by rotationTransition.animateFloat(
+        val animatedRotation by rotationTransition.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
             animationSpec = infiniteRepeatable(
@@ -86,7 +81,7 @@ fun FloatingBallView(
             ),
             label = "rotation"
         )
-        animatedFloat
+        animatedRotation
     } else 0f
 
     val backgroundColor = when (status) {
@@ -94,6 +89,7 @@ fun FloatingBallView(
         BallStatus.RUNNING -> Color(0xFF673AB7)
         BallStatus.SUCCESS -> Color(0xFF4CAF50)
         BallStatus.ERROR -> Color(0xFFF44336)
+        BallStatus.MULTI_IMAGE -> Color(0xFFFF9800)
     }
 
     Box(
@@ -199,6 +195,31 @@ fun FloatingBallView(
                         tint = Color.White,
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+
+                BallStatus.MULTI_IMAGE -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        if (badgeCount > 0) {
+                            Text(
+                                text = badgeCount.toString(),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = when {
+                                    badgeCount >= 100 -> 10.sp
+                                    badgeCount >= 10 -> 14.sp
+                                    else -> 18.sp
+                                },
+                                maxLines = 1
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.fillMaxSize(0.6f)
+                            )
+                        }
+                    }
                 }
             }
         }

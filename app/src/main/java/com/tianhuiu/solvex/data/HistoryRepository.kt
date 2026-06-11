@@ -18,10 +18,6 @@ class HistoryRepository(private val historyDao: HistoryDao) {
     fun getHistoryItemByIdFlow(id: String): Flow<HistoryItem?> =
         historyDao.getHistoryItemByIdFlow(id)
 
-    suspend fun getHistoryItemsPaged(page: Int, pageSize: Int): List<HistoryItem> {
-        return historyDao.getHistoryItemsPaged(pageSize, page * pageSize)
-    }
-
     fun getHistoryCount(): Flow<Int> = historyDao.getHistoryCount()
 
     suspend fun addHistoryItem(item: HistoryItem) {
@@ -36,12 +32,10 @@ class HistoryRepository(private val historyDao: HistoryDao) {
         historyDao.deleteHistoryItemById(id)
     }
 
-    suspend fun cleanupProcessingItems(query: String, result: String) {
+    suspend fun cleanupProcessingItems() {
         historyDao.markProcessingAsCancelled(
             processingStatus = "PROCESSING",
-            status = "CANCELLED",
-            query = query,
-            result = result
+            status = "CANCELLED"
         )
     }
 

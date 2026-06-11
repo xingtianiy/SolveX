@@ -1,6 +1,5 @@
 package com.tianhuiu.solvex.ui.history
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.NavigateBefore
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Face
@@ -31,7 +32,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,16 +57,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.tianhuiu.solvex.ui.components.MathView
+import com.tianhuiu.solvex.ui.components.DetailSection
+import com.tianhuiu.solvex.ui.components.MergeModeScreenshotOverlay
+import com.tianhuiu.solvex.ui.components.OutputRenderer
 import com.tianhuiu.solvex.ui.components.StatusBadge
-import com.tianhuiu.solvex.utils.AutomationTools
-import com.tianhuiu.solvex.utils.NotificationUtils
+import com.tianhuiu.solvex.utils.ResponseParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * 历史解析详情屏幕。
@@ -79,22 +77,21 @@ fun HistoryDetailScreen(
     onBack: () -> Unit,
 ) {
     val item by viewModel.getHistoryItemById(itemId).collectAsState(initial = null)
-    var showFullscreenImage by remember { mutableStateOf(value = false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("解析详情", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                windowInsets = WindowInsets(top = 0.dp)
-            )
-        }
-    ) { padding ->
-        if (item == null) {
+    if (item == null) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("解析详情", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    windowInsets = WindowInsets(top = 0.dp)
+                )
+            }
+        ) { padding ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -103,12 +100,69 @@ fun HistoryDetailScreen(
             ) {
                 CircularProgressIndicator()
             }
-        } else {
-            val currentItem = item!!
-            key(itemId) {
-                val dateFormat =
-                    remember { SimpleDateFormat("yyyy MM-dd HH:mm:ss", Locale.getDefault()) }
-                val timeStr = dateFormat.format(Date(currentItem.timestamp))
+        }
+    } else {
+        val currentItem = item!!
+        key(itemId) {
+            val imagePaths = currentItem.imagePaths.ifEmpty {
+                listOfNotNull(currentItem.imagePath)
+            }
+            var currentImageIndex by remember { mutableStateOf(0) }
+            var showFullscreenImage by remember { mutableStateOf(false) }
+
+            val sectionLabel = remember(currentItem.query, currentItem.result) {
+                ResponseParser.detectSectionLabel(
+                    currentItem.result.ifBlank { currentItem.query }
+                )
+            }
+            val isPerImageMode = currentItem.query.contains(sectionLabel) ||
+                        currentItem.result.contains("## $sectionLabel")
+            val isMergeMode = imagePaths.size > 1 && !isPerImageMode
+
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("解析详情", fontWeight = FontWeight.Bold)
+                                if (!isMergeMode && imagePaths.size > 1) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "${currentImageIndex + 1}/${imagePaths.size}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                            }
+                        },
+                        actions = {
+                            if (!isMergeMode && imagePaths.size > 1) {
+                                IconButton(
+                                    onClick = { if (currentImageIndex > 0) currentImageIndex-- },
+                                    enabled = currentImageIndex > 0
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.NavigateBefore, "上一张")
+                                }
+                                IconButton(
+                                    onClick = { if (currentImageIndex < imagePaths.size - 1) currentImageIndex++ },
+                                    enabled = currentImageIndex < imagePaths.size - 1
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.NavigateNext, "下一张")
+                                }
+                            }
+                        },
+                        windowInsets = WindowInsets(top = 0.dp)
+                    )
+                }
+            ) { padding ->
+                val timeStr = remember(currentItem.timestamp) {
+                    com.tianhuiu.solvex.utils.formatTimestamp(currentItem.timestamp)
+                }
 
                 Column(
                     modifier = Modifier
@@ -116,7 +170,6 @@ fun HistoryDetailScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // 元数据卡片
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -144,12 +197,6 @@ fun HistoryDetailScreen(
                                 StatusBadge(currentItem.status)
                             }
 
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(
-                                    alpha = 0.5f
-                                )
-                            )
-
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 MetadataRow(
                                     icon = Icons.Default.Face,
@@ -173,13 +220,13 @@ fun HistoryDetailScreen(
                         }
                     }
 
-                    // 截图展示
-                    currentItem.imagePath?.let { path ->
-                        val file = File(path)
+                    if (imagePaths.isNotEmpty()) {
+                        val currentPath = imagePaths.getOrElse(currentImageIndex) { imagePaths.first() }
+                        val file = File(currentPath)
                         if (file.exists()) {
-                            val bitmap by produceState<android.graphics.Bitmap?>(null, path) {
+                            val bitmap by produceState<android.graphics.Bitmap?>(null, currentPath) {
                                 value = withContext(Dispatchers.IO) {
-                                    BitmapFactory.decodeFile(path)
+                                    com.tianhuiu.solvex.utils.decodeSampledBitmap(currentPath, 1200, 1200)
                                 }
                             }
                             val loadedBitmap = bitmap
@@ -195,58 +242,101 @@ fun HistoryDetailScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(vertical = 4.dp)
                                     )
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        border = androidx.compose.foundation.BorderStroke(
-                                            1.dp,
-                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Image(
-                                            bitmap = imageBitmap,
-                                            contentDescription = "截图",
-                                            contentScale = ContentScale.FillWidth,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { showFullscreenImage = true }
-                                        )
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Image(
+                                                bitmap = imageBitmap,
+                                                contentDescription = "截图",
+                                                contentScale = ContentScale.FillWidth,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { showFullscreenImage = true }
+                                            )
+                                        }
+                                        // 合并模式下截图左右翻页按钮
+                                        if (isMergeMode) {
+                                            MergeModeScreenshotOverlay(
+                                                currentImageIndex = currentImageIndex,
+                                                totalImages = imagePaths.size,
+                                                onPrevImage = { if (currentImageIndex > 0) currentImageIndex-- },
+                                                onNextImage = { if (currentImageIndex < imagePaths.size - 1) currentImageIndex++ },
+                                            )
+                                        }
                                     }
                                 }
 
                                 if (showFullscreenImage) {
                                     FullscreenImageDialog(
                                         bitmap = imageBitmap,
-                                        onDismiss = { showFullscreenImage = false }
+                                        onDismiss = { showFullscreenImage = false },
+                                        onPrevious = if (currentImageIndex > 0) {
+                                            { currentImageIndex-- }
+                                        } else null,
+                                        onNext = if (currentImageIndex < imagePaths.size - 1) {
+                                            { currentImageIndex++ }
+                                        } else null,
+                                        pageInfo = if (imagePaths.size > 1) "${currentImageIndex + 1}/${imagePaths.size}" else null
                                     )
                                 }
                             }
                         }
                     }
 
-                    // 题目与解答区块
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        DetailSection(
-                            title = "解析问题",
-                            content = NotificationUtils.renderStructuredQuestion(currentItem.query),
-                            badgeText = AutomationTools.extractQuestionType(currentItem.query)
-                        )
 
-                        val (process, finalAnswer) = NotificationUtils.splitAnalysisResult(
+                        val queryText = if (imagePaths.size > 1) {
+                            val perQ = ResponseParser.extractPerQuestionQuery(currentItem.query, currentImageIndex + 1, sectionLabel)
+                            if (perQ != null) {
+                                perQ
+                            } else if (isPerImageMode) {
+                                "正在等待..."
+                            } else {
+                                currentItem.query
+                            }
+                        } else {
+                            currentItem.query
+                        }
+                        val allStructuredQuestions = remember(queryText) {
+                            ResponseParser.parseAllStructuredQuestions(queryText)
+                        }
+                        if (allStructuredQuestions.isNotEmpty()) {
+                            allStructuredQuestions.forEachIndexed { index, q ->
+                                DetailSection(
+                                    title = if (allStructuredQuestions.size > 1) "${sectionLabel} ${index + 1}" else "解析问题",
+                                    content = ResponseParser.renderStructuredQuestionFromObject(q),
+                                    badgeText = q.type
+                                )
+                            }
+                        } else if (queryText.isNotBlank() && queryText != "正在处理...") {
+                            DetailSection(
+                                title = "解析问题",
+                                content = queryText
+                            )
+                        }
+
+                        val answerForDisplay = if (imagePaths.size > 1) {
+                            val section = ResponseParser.extractPerQuestionSection(currentItem.result, currentImageIndex + 1, sectionLabel)
+                            if (section != null) {
+                                section
+                            } else if (isPerImageMode) {
+                                "正在等待..."
+                            } else {
+                                currentItem.result
+                            }
+                        } else {
                             currentItem.result
-                        )
-
-                        if (process.isNotBlank()) {
-                            val title = if (finalAnswer.isNotBlank()) "解析过程" else "解析结果"
-                            DetailSection(title = title, content = process)
                         }
-
-                        if (finalAnswer.isNotBlank()) {
-                            FinalAnswerSection(title = "最终答案", content = finalAnswer)
-                        }
+                        OutputRenderer(result = answerForDisplay)
                     }
 
                     Spacer(Modifier.height(32.dp))
@@ -256,9 +346,6 @@ fun HistoryDetailScreen(
     }
 }
 
-/**
- * 元数据行。
- */
 @Composable
 fun MetadataRow(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
     Row(
@@ -289,103 +376,15 @@ fun MetadataRow(icon: ImageVector, label: String, value: String, modifier: Modif
 }
 
 /**
- * 详情内容区块。
- */
-@Composable
-fun DetailSection(
-    title: String,
-    content: String,
-    isPrimary: Boolean = false,
-    badgeText: String? = null
-) {
-    Column(
-        modifier = Modifier.padding(top = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold
-            )
-
-            if (badgeText != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = badgeText,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = if (isPrimary) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-        ) {
-            MathView(
-                text = content,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun FinalAnswerSection(title: String, content: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-            )
-        ) {
-            Text(
-                text = content,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-/**
  * 全屏截图查看对话框。
  */
 @Composable
 fun FullscreenImageDialog(
     bitmap: androidx.compose.ui.graphics.ImageBitmap,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onPrevious: (() -> Unit)? = null,
+    onNext: (() -> Unit)? = null,
+    pageInfo: String? = null
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -412,7 +411,57 @@ fun FullscreenImageDialog(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White)
                 }
+
+                if (pageInfo != null) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = pageInfo,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                if (onPrevious != null) {
+                    IconButton(
+                        onClick = onPrevious,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.NavigateBefore,
+                            contentDescription = "上一张",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                if (onNext != null) {
+                    IconButton(
+                        onClick = onNext,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.NavigateNext,
+                            contentDescription = "下一张",
+                            tint = Color.White
+                        )
+                    }
+                }
             }
         }
     }
 }
+

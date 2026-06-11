@@ -19,6 +19,7 @@ import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.data.models.DownloadStatus
 import com.tianhuiu.solvex.data.models.EngineType
 import com.tianhuiu.solvex.data.models.ModelProvider
+import com.tianhuiu.solvex.data.models.MultiImageModeConfig
 import com.tianhuiu.solvex.data.models.PermissionSettings
 import com.tianhuiu.solvex.data.models.ProjectMode
 import com.tianhuiu.solvex.data.models.ProviderKind
@@ -28,8 +29,8 @@ import com.tianhuiu.solvex.data.models.UpdateLevel
 import com.tianhuiu.solvex.data.models.VersionInfo
 import com.tianhuiu.solvex.network.UnifiedLLMClient
 import com.tianhuiu.solvex.service.MainService
-import com.tianhuiu.solvex.service.SolveXAccessibilityService
-import com.tianhuiu.solvex.utils.NotificationUtils
+import com.tianhuiu.solvex.utils.NotificationHelper
+import com.tianhuiu.solvex.utils.SystemUtils
 import com.tianhuiu.solvex.utils.UpdateManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,9 +44,6 @@ import rikka.shizuku.Shizuku
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-/**
- * 应用全局 ViewModel：管理配置、权限状态及核心服务逻辑。
- */
 @Serializable
 data class ExportData(
     val providers: List<ModelProvider> = emptyList(),
@@ -91,6 +89,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var quickConfig by mutableStateOf(QuickModeConfig())
+        private set
+
+    var multiImageConfig by mutableStateOf(MultiImageModeConfig())
         private set
 
     var defaultProviderId by mutableStateOf<String?>(null)
@@ -159,6 +160,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     activeMode = null
                 }
+                // 同步应用内通知状态，确保服务状态变化时首页通知实时更新
+                syncNotificationState()
             }
         }
 
@@ -175,6 +178,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     selectedMode = config.selectedMode
                     studyConfig = config.studyConfig
                     quickConfig = config.quickConfig
+                    multiImageConfig = config.multiImageConfig
                     defaultProviderId = config.defaultProviderId
                     autoScrollContent = config.autoScrollContent
                     checkPermissions()
@@ -204,6 +208,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             launchCount = repository.launchCountFlow.first()
             repository.incrementLaunchCount()
+            // launchCount 加载完成后同步通知，确保新手引导通知正确显示
+            syncNotificationState()
         }
     }
 
@@ -226,15 +232,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (manual) isCheckingUpdate = false
                     repository.saveLastUpdateCheck(System.currentTimeMillis())
 
-                    // 保存新 ETag
                     if (newEtag != null) {
                         repository.saveUpdateEtag(newEtag)
                     }
 
-                    // 缓存版本信息
                     repository.saveCachedVersion(updateManager.encodeVersion(info))
 
-                    // 比较 versionCode
                     if (info.versionCode > BuildConfig.VERSION_CODE) {
                         updateInfo = info
                         repository.saveConsecutiveNoUpdate(0)
@@ -243,7 +246,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             (repository.consecutiveNoUpdateFlow.first()) + 1
                         )
                         if (manual) {
-                            NotificationUtils.showToast(
+                            NotificationHelper.showToast(
                                 getApplication(),
                                 "当前已是最新版本"
                             )
@@ -260,7 +263,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             (repository.consecutiveNoUpdateFlow.first()) + 1
                         )
                         if (manual) {
-                            NotificationUtils.showToast(
+                            NotificationHelper.showToast(
                                 getApplication(),
                                 "当前已是最新版本"
                             )
@@ -275,7 +278,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             val cachedInfo = updateManager.parseCachedVersion(cachedJson)
                             if (cachedInfo != null && cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
                                 updateInfo = cachedInfo
-                                NotificationUtils.showToast(
+                                NotificationHelper.showToast(
                                     getApplication(),
                                     "网络不可用，显示上次缓存的更新信息"
                                 )
@@ -284,7 +287,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         val message = error.message ?: "未知错误"
-                        NotificationUtils.showFeedback(
+                        NotificationHelper.showFeedback(
                             getApplication(),
                             userMessage = "检查更新失败",
                             detailedLog = "Update check failed: $message"
@@ -294,9 +297,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * 开始下载并安装 APK。
-     */
     fun startUpdate() {
         val info = updateInfo ?: return
         viewModelScope.launch {
@@ -327,24 +327,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             delay(300)
             repository.saveAppConfig(
                 AppConfig(
-                    providers,
-                    assistants,
-                    permissions,
-                    studyConfig,
-                    quickConfig,
-                    defaultProviderId,
-                    selectedAssistantId,
-                    selectedEngine,
-                    selectedMode,
-                    autoScrollContent
+                    providers = providers,
+                    assistants = assistants,
+                    permissions = permissions,
+                    studyConfig = studyConfig,
+                    quickConfig = quickConfig,
+                    multiImageConfig = multiImageConfig,
+                    defaultProviderId = defaultProviderId,
+                    selectedAssistantId = selectedAssistantId,
+                    selectedEngine = selectedEngine,
+                    selectedMode = selectedMode,
+                    autoScrollContent = autoScrollContent
                 )
             )
         }
     }
 
-    /**
-     * 移除应用内通知。
-     */
     fun dismissInAppNotification(id: String) {
         (getApplication<Application>() as com.tianhuiu.solvex.SolveXApplication).container.appNotificationManager.dismiss(
             id
@@ -412,6 +410,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         save()
     }
 
+    fun updateMultiImageConfig(config: MultiImageModeConfig) {
+        multiImageConfig = config
+        save()
+    }
+
     fun updateDefaultProviderId(id: String?) {
         defaultProviderId = id
         save()
@@ -458,7 +461,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             save()
         } catch (e: Exception) {
-            NotificationUtils.showFeedback(
+            NotificationHelper.showFeedback(
                 getApplication(),
                 userMessage = "导入失败",
                 detailedLog = "Config import failed",
@@ -485,7 +488,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return newList
     }
 
-    /** 连通性测试状态 */
     var connectivityTestStates by mutableStateOf<Map<String, ConnectivityTestState>>(emptyMap())
         private set
 
@@ -551,11 +553,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else false
 
         // 无障碍状态
-        isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+        isAccessibilityEnabled = SystemUtils.isAccessibilityServiceEnabled(context)
 
+        syncNotificationState()
+    }
+
+    /**
+     * 同步应用内通知状态（不重复检查系统权限，仅同步通知管理器）。
+     */
+    private fun syncNotificationState() {
+        val context = getApplication<Application>()
         val notificationManager =
             (context as com.tianhuiu.solvex.SolveXApplication).container.appNotificationManager
-        // 同步所有通知状态（含无障碍状态）
         notificationManager.syncAll(
             isOverlayGranted = isOverlayPermissionGranted,
             isNotificationGranted = isNotificationPermissionGranted,
@@ -565,15 +574,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isServiceRunning = isServiceRunning,
             launchCount = launchCount,
         )
-    }
-
-    private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
-        val serviceName = "${context.packageName}/${SolveXAccessibilityService::class.java.name}"
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-        return enabledServices.split(':').any { it == serviceName }
     }
 
     fun requestOverlayPermission() {
@@ -695,16 +695,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             AssistantConfig(
                 id = UUID.randomUUID().toString(),
                 name = "题目解答助手",
-                ocrPrompt = "你是一个精准的题目转录员。请直接原文输出图片中的题目文本和选项，严禁改写。如果是数学题，请使用 LaTeX 语法确保公式和符号渲染准确。",
-                textPrompt = "你是一个资深的解题专家。请对提取出的题目进行深度解析，并严格按照以下结构输出：\n\n### 解题思路\n[分步骤详细说明解题过程。对于选择题，请逐一分析选项。]\n\n### 关键知识点\n[总结本题涉及的核心公式、定理或概念。]\n\n### 最终答案\n[重要：此处必须提供最终结论。请直接输出纯文本答案，严禁使用 LaTeX、Markdown 加粗或任何格式化标记，只允许纯文本输出。]",
-                visionPrompt = "你是一个拥有视觉感知能力的解题专家。请结合图片细节进行深度解析，并严格按照以下结构输出：\n\n### 解题思路\n[分步骤详细说明解题过程。]\n\n### 关键知识点\n[总结核心考点。]\n\n### 最终答案\n[重要：此处必须提供最终结论。请直接输出纯文本答案，严禁使用 LaTeX、Markdown 加粗或任何格式化标记。]"
+                ocrPrompt = "你是一个精准的题目转录员。请严格按照以下 JSON 格式输出截图中题目的内容，不要包含任何额外文字：\n{\"type\": \"单选题/多选题/判断题/填空题/简答题\", \"question\": \"题目正文\", \"options\": [\"A. xxx\", \"B. xxx\"]}\n\n注意：\n- 如果是数学题，使用 LaTeX 语法（行内 $...$，独立行 $$...$$）\n- 选择题必须完整提取所有选项\n- 严禁改写原文内容\n- 过滤系统状态栏、虚拟按键、广告等非内容元素",
+                textPrompt = "你是一个资深的解题专家。严格遵循以下 ### 标题输出格式，每个区块以 ### 开头独占一行：\n\n### 解题思路\n[分步骤说明解题过程，选择题需逐一分析选项，可使用 LaTeX 公式]\n\n### 关键知识点\n[本题涉及的核心公式、定理或概念]\n\n### 最终答案\n[最终结论，仅纯文本]",
+                visionPrompt = "你是一个拥有视觉感知能力的解题专家。严格遵循以下 ### 标题输出格式，每个区块以 ### 开头独占一行：\n\n### 解题思路\n[分步骤说明解题过程，可使用 LaTeX 公式]\n\n### 关键知识点\n[核心考点总结]\n\n### 最终答案\n[最终结论，仅纯文本]"
             ),
             AssistantConfig(
                 id = UUID.randomUUID().toString(),
                 name = "聊天总结助手",
-                ocrPrompt = "你是一个高效的对话提取员。请按时间顺序提取截图中的聊天记录，包括发言人、时间（如果有）和消息内容。",
-                textPrompt = "你是一个专业的内容分析师。请对提供的聊天记录进行精简总结，重点提取核心话题、主要观点、达成的共识以及待办事项。请使用简洁的列表形式输出。\n\n### 最终答案\n[请在此处提供一句话核心总结，使用纯文本，严禁格式化。]",
-                visionPrompt = "你是一个专业的内容分析师。请观察截图中的聊天界面，对对话内容进行精简总结，提取核心话题和关键结论。请使用简洁的列表形式输出。\n\n### 最终答案\n[请在此处提供一句话核心总结，使用纯文本，严禁格式化。]"
+                ocrPrompt = "你是一个高效的对话提取员。请按时间顺序提取截图中的聊天记录，包括发言人、时间和消息内容。直接以原文格式输出，不需要 JSON 格式。",
+                textPrompt = "你是一个专业的内容分析师。严格遵循以下 ### 标题输出格式，每个区块以 ### 开头独占一行：\n\n### 核心话题\n[讨论的主要内容]\n\n### 关键观点\n[各方主要观点和共识]\n\n### 总结\n[一句话核心总结，纯文本]",
+                visionPrompt = "你是一个专业的内容分析师。严格遵循以下 ### 标题输出格式，每个区块以 ### 开头独占一行：\n\n### 核心话题\n[讨论的主要内容]\n\n### 关键观点\n[各方主要观点和共识]\n\n### 总结\n[一句话核心总结，纯文本]"
             )
         )
         permissions = PermissionSettings()
@@ -712,7 +712,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-/** 连通性测试状态 */
 sealed class ConnectivityTestState {
     data object Testing : ConnectivityTestState()
     data class Success(val modelCount: Int) : ConnectivityTestState()

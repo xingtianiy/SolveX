@@ -62,9 +62,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tianhuiu.solvex.data.models.AnalysisStatus
 import com.tianhuiu.solvex.data.models.HistoryItem
+
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.StatusBadge
+import com.tianhuiu.solvex.utils.calculateInSampleSize
 import com.tianhuiu.solvex.utils.FileUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -104,17 +107,13 @@ fun HistoryScreen(
 
     val listState = rememberLazyListState()
 
-    // 自动置顶/滚动逻辑：仅当有新任务产生（总数增加）时滚动
+    // 自动滚动逻辑：仅当有新记录且状态为处理中时滚动到顶部
     var prevTotalCount by remember { mutableIntStateOf(totalCount) }
-    LaunchedEffect(totalCount, autoScroll) {
+    LaunchedEffect(totalCount) {
         if (totalCount > prevTotalCount) {
-            if (autoScroll) {
-                // 跟随内容：滚动到最新项（底部）
-                val lastIndex = filteredItems.size - 1
-                if (lastIndex >= 0) {
-                    listState.animateScrollToItem(lastIndex)
-                }
-            } else {
+            // 检查最新项是否为处理中状态
+            val latestItem = historyItems.firstOrNull()
+            if (latestItem?.status == AnalysisStatus.PROCESSING) {
                 listState.animateScrollToItem(0)
             }
         }
@@ -205,8 +204,7 @@ fun HistoryScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -374,17 +372,7 @@ fun HistoryCard(item: HistoryItem, onLongClick: () -> Unit, onClick: () -> Unit)
 fun HistoryThumbnail(path: String) {
     val bitmapState = produceState<android.graphics.Bitmap?>(initialValue = null, path) {
         value = withContext(Dispatchers.IO) {
-            try {
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                BitmapFactory.decodeFile(path, options)
-                options.inSampleSize = calculateInSampleSize(options, 200, 200)
-                options.inJustDecodeBounds = false
-                BitmapFactory.decodeFile(path, options)
-            } catch (_: Exception) {
-                null
-            }
+            com.tianhuiu.solvex.utils.decodeSampledBitmap(path, 200, 200)
         }
     }
 
@@ -425,23 +413,6 @@ fun HistoryThumbnail(path: String) {
             )
         }
     }
-}
-
-private fun calculateInSampleSize(
-    options: BitmapFactory.Options,
-    reqWidth: Int,
-    reqHeight: Int
-): Int {
-    val (height: Int, width: Int) = options.outHeight to options.outWidth
-    var inSampleSize = 1
-    if (height > reqHeight || width > reqWidth) {
-        val halfHeight: Int = height / 2
-        val halfWidth: Int = width / 2
-        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-            inSampleSize *= 2
-        }
-    }
-    return inSampleSize
 }
 
 /**

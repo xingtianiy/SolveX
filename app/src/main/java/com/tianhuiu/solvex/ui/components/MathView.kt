@@ -25,6 +25,20 @@ private val latexPattern = Regex(
     """\$|\\\[|\\\(|\\begin\{|\\frac|\\sqrt|\\sum|\\int|\\alpha|\\beta|\\gamma|\\theta|\\pi|\\infty"""
 )
 
+/** 保护 LaTeX 块不被 Markdown 解析破坏（如 * 被解释为斜体） */
+private val displayMathProtectRegex = Regex("""\$\$([\s\S]*?)\$\$""")
+private val inlineMathProtectRegex = Regex("""(?<!\$)\$(?!\$)([^\$\n]+?)\$(?!\$)""")
+
+private fun protectLatex(text: String): String {
+    return text
+        .replace(displayMathProtectRegex) { m ->
+            "<span class=\"tex2jax_process\">\$\$${m.groupValues[1]}\$\$</span>"
+        }
+        .replace(inlineMathProtectRegex) { m ->
+            "<span class=\"tex2jax_process\">\$${m.groupValues[1]}\$</span>"
+        }
+}
+
 private fun hasLatex(text: String): Boolean = latexPattern.containsMatchIn(text)
 
 /** HTML 模板，只构建一次 */
@@ -73,7 +87,7 @@ fun MathView(
             val wv = currentWv ?: return@LaunchedEffect
             if (lastRendered.isNotEmpty()) delay(50)
             val encodedText = android.util.Base64.encodeToString(
-                text.toByteArray(),
+                protectLatex(text).toByteArray(),
                 android.util.Base64.NO_WRAP
             )
             wv.evaluateJavascript("updateContent('$encodedText')", null)

@@ -24,10 +24,6 @@ enum class PermissionType {
     SHIZUKU
 }
 
-/**
- * 应用内通知数据模型。
- */
-@Serializable
 data class InAppNotification(
     val id: String = UUID.randomUUID().toString(),
     val type: NotificationType,

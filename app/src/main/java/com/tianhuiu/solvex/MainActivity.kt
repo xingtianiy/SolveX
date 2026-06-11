@@ -14,7 +14,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.SolveXApp
-import com.tianhuiu.solvex.utils.NotificationUtils
+import com.tianhuiu.solvex.utils.NotificationHelper
 import kotlinx.coroutines.launch
 
 /**
@@ -67,8 +67,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleDeepLink(intent: Intent) {
-        if (intent.action == NotificationUtils.ACTION_VIEW_HISTORY) {
-            val historyId = intent.getStringExtra(NotificationUtils.EXTRA_HISTORY_ID)
+        if (intent.action == NotificationHelper.ACTION_VIEW_HISTORY) {
+            val historyId = intent.getStringExtra(NotificationHelper.EXTRA_HISTORY_ID)
             if (historyId != null) {
                 viewModel.deepLinkHistoryId = historyId
             }

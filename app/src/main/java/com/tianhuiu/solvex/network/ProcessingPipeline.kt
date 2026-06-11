@@ -2,7 +2,6 @@ package com.tianhuiu.solvex.network
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.util.Base64
 import android.util.Log
 import com.tianhuiu.solvex.data.models.AppConfig
 import com.tianhuiu.solvex.data.models.AssistantConfig
@@ -14,8 +13,9 @@ import com.tianhuiu.solvex.data.models.ProcessingResult
 import com.tianhuiu.solvex.data.models.ProcessingRoute
 import com.tianhuiu.solvex.data.models.ProcessingStatus
 import com.tianhuiu.solvex.data.models.ProjectMode
-import com.tianhuiu.solvex.utils.AutomationTools
+import com.tianhuiu.solvex.utils.ResponseParser
 import com.tianhuiu.solvex.utils.FileUtils
+import com.tianhuiu.solvex.utils.toBase64Jpeg
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -23,20 +23,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.util.UUID
 
-/**
- * 处理管道。
- */
 class ProcessingPipeline(
     private val appContext: Context,
     private val unifiedClient: UnifiedLLMClient,
 ) {
 
-    /**
-     * 已解析的模型及配置。
-     */
     data class ResolvedModels(
         val assistant: AssistantConfig,
         val textProvider: ModelProvider?,
@@ -49,9 +42,6 @@ class ProcessingPipeline(
         val engine: EngineType,
     )
 
-    /**
-     * 根据当前应用配置解析各阶段使用的模型及提供商。
-     */
     fun resolveModels(config: AppConfig): ResolvedModels {
         val assistant = config.assistants.find { it.id == config.selectedAssistantId }
             ?: config.assistants.firstOrNull()
@@ -72,7 +62,7 @@ class ProcessingPipeline(
                 )
             }
 
-            ProjectMode.QUICK_MODE -> {
+            ProjectMode.QUICK_MODE, ProjectMode.MULTI_IMAGE_MODE -> {
                 val c = config.quickConfig
                 DataConfig(
                     c.textProviderId,
@@ -131,9 +121,6 @@ class ProcessingPipeline(
         val defaultPid: String?
     )
 
-    /**
-     * 构建模型摘要描述。
-     */
     private fun buildModelSummary(model: String, providerName: String?): String {
         val trimmedModel = model.trim()
         val trimmedProvider = providerName?.trim()
@@ -141,16 +128,16 @@ class ProcessingPipeline(
         return if (trimmedProvider.isNullOrBlank()) trimmedModel else "$trimmedModel（$trimmedProvider）"
     }
 
-    /**
-     * 初始化处理结果并保存截图。
-     */
     fun createBaseResult(
         models: ResolvedModels,
         bitmap: Bitmap,
-        detail: String
+        detail: String,
+        additionalBitmaps: List<Bitmap> = emptyList()
     ): ProcessingResult {
         val historyId = UUID.randomUUID().toString()
         val imagePath = FileUtils.saveBitmapToInternal(appContext, bitmap)
+        val additionalPaths = additionalBitmaps.mapNotNull { FileUtils.saveBitmapToInternal(appContext, it) }
+        val allPaths = listOfNotNull(imagePath) + additionalPaths
 
         return ProcessingResult(
             id = historyId,
@@ -163,7 +150,7 @@ class ProcessingPipeline(
                 buildModelSummary(models.visionModel, models.visionProvider?.name),
             detail = detail,
             screenshotPath = imagePath,
-            screenshotPaths = listOfNotNull(imagePath),
+            screenshotPaths = allPaths,
             events = listOf(ProcessingEvent(title = "请求开始", detail = "已创建处理记录"))
         )
     }
@@ -184,7 +171,6 @@ class ProcessingPipeline(
 
         coroutineScope {
             try {
-                // 并行生成截图标题和摘要
                 val summaryDeferred = async {
                     try {
                         val summaryText = collectTextStream(
@@ -196,20 +182,20 @@ class ProcessingPipeline(
                             imagesBase64 = listOf(imageBase64),
                             firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis
                         ) { _ -> }
-                        parseSummary(summaryText)?.let { (title, summary) ->
+                        ResponseParser.parseSummary(summaryText)?.let { (title, summary) ->
                             onSummaryGenerated(title, summary)
                         }
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                     }
                 }
 
-                // 提取题目内容（OCR 或 视觉提取）
                 val extractedText = if (models.engine == EngineType.TEXT_ENGINE) {
                     collectTextStream(
                         provider = models.ocrProvider ?: error("未配置 OCR 模型"),
                         model = models.ocrModel,
-                        systemPrompt = "${Prompts.EXTRACTION_SYSTEM_BASE}\n用户配置：${models.assistant.ocrPrompt}",
-                        userPrompt = Prompts.OCR_EXTRACTION_USER_PROMPT,
+                        systemPrompt = Prompts.EXTRACTION_SYSTEM_PROMPT,
+                        userPrompt = models.assistant.ocrPrompt,
                         imagesBase64 = listOf(imageBase64),
                         firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
                         onDelta = onQueryExtracted
@@ -218,8 +204,8 @@ class ProcessingPipeline(
                     collectTextStream(
                         provider = models.visionProvider ?: error("未配置视觉模型"),
                         model = models.visionModel,
-                        systemPrompt = "${Prompts.EXTRACTION_SYSTEM_BASE}\n用户配置：${models.assistant.ocrPrompt}",
-                        userPrompt = Prompts.VISION_EXTRACTION_USER_PROMPT,
+                        systemPrompt = Prompts.EXTRACTION_SYSTEM_PROMPT,
+                        userPrompt = models.assistant.ocrPrompt,
                         imagesBase64 = listOf(imageBase64),
                         firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
                         onDelta = onQueryExtracted
@@ -228,7 +214,6 @@ class ProcessingPipeline(
 
                 Log.d("ProcessingPipeline", "Extracted OCR Text:\n$extractedText")
 
-                // 检查是否提取到了有效内容
                 if (extractedText.isBlank()) {
                     summaryDeferred.await()
                     return@coroutineScope base.copy(
@@ -238,13 +223,12 @@ class ProcessingPipeline(
                     )
                 }
 
-                // 进行详细解答分析
                 val answer = if (models.engine == EngineType.TEXT_ENGINE) {
                     collectTextStream(
                         provider = models.textProvider ?: error("未配置文本模型"),
                         model = models.textModel,
-                        systemPrompt = "${Prompts.ANALYSIS_SYSTEM_BASE}\n用户配置：${models.assistant.textPrompt}",
-                        userPrompt = "这是从图片中提取出的内容，请按照要求进行深度处理：\n\n$extractedText",
+                        systemPrompt = Prompts.ANALYSIS_SYSTEM_PROMPT,
+                        userPrompt = "${models.assistant.textPrompt}\n\n以下是提取出的内容：\n\n$extractedText",
                         firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
                         onDelta = onDelta
                     )
@@ -252,15 +236,14 @@ class ProcessingPipeline(
                     collectTextStream(
                         provider = models.visionProvider ?: error("未配置视觉模型"),
                         model = models.visionModel,
-                        systemPrompt = "${Prompts.ANALYSIS_SYSTEM_BASE}\n用户配置：${models.assistant.visionPrompt}",
-                        userPrompt = "这是你要处理的图片。文字提取结果参考：\n$extractedText\n\n请基于图片内容和提取参考进行详细处理。",
+                        systemPrompt = Prompts.ANALYSIS_SYSTEM_PROMPT,
+                        userPrompt = "${models.assistant.visionPrompt}\n\n文字提取参考：\n$extractedText",
                         imagesBase64 = listOf(imageBase64),
                         firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
                         onDelta = onDelta
                     )
                 }
 
-                // 请求极简答案/自动化动作
                 var automationAction: AutomationAction? = null
                 try {
                     val autoText = collectTextStream(
@@ -273,14 +256,14 @@ class ProcessingPipeline(
                         firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
                         onDelta = { _ -> }
                     )
-                    automationAction = AutomationTools.parseAutomationResponse(autoText)
+                    automationAction = ResponseParser.parseAutomationResponse(autoText)
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.e("ProcessingPipeline", "Automation request failed", e)
                 }
 
                 summaryDeferred.await()
 
-                // 检测空结果：模型返回了空内容
                 if (config.selectedMode == ProjectMode.QUICK_MODE && automationAction == null) {
                     return@coroutineScope base.copy(
                         status = ProcessingStatus.FAILURE,
@@ -309,26 +292,170 @@ class ProcessingPipeline(
     }
 
     /**
-     * 解析生成的摘要内容。
+     * 多图模式处理：根据配置选择合并提交或逐张分析。
      */
-    private fun parseSummary(text: String): Pair<String, String>? {
-        return try {
-            val title = text.lines()
-                .find { it.startsWith("Title:", ignoreCase = true) }
-                ?.removePrefix("Title:")?.trim()
-            val summary = text.lines()
-                .find { it.startsWith("Summary:", ignoreCase = true) }
-                ?.removePrefix("Summary:")?.trim()
+    suspend fun processMultiImage(
+        config: AppConfig,
+        bitmaps: List<Bitmap>,
+        onSummaryGenerated: (String, String) -> Unit = { _, _ -> },
+        onQueryExtracted: (String) -> Unit = {},
+        onDelta: (String) -> Unit,
+        onPageStart: (Int) -> Unit = {},
+        onImageComplete: ((Int, String) -> Unit)? = null
+    ): ProcessingResult = withContext(Dispatchers.Default) {
+        val models = resolveModels(config)
+        val base = createBaseResult(models, bitmaps.first(), "正在处理多张截图...", bitmaps.drop(1))
 
-            if ((title != null) && (summary != null)) title to summary else null
-        } catch (_: Exception) {
-            null
+        coroutineScope {
+            try {
+                val summaryDeferred = async {
+                    try {
+                        val summaryText = collectTextStream(
+                            provider = models.visionProvider ?: models.ocrProvider
+                            ?: error("未配置视觉或文本模型"),
+                            model = if (models.visionProvider != null) models.visionModel else models.ocrModel,
+                            systemPrompt = Prompts.SUMMARY_SYSTEM_PROMPT,
+                            userPrompt = "请为此截图生成标题和摘要。",
+                            imagesBase64 = listOf(bitmaps.first().toBase64Jpeg()),
+                            firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis
+                        ) { _ -> }
+                        ResponseParser.parseSummary(summaryText)?.let { (title, summary) ->
+                            onSummaryGenerated(title, summary)
+                        }
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
+                }
+
+                val multiVisionProviderId = config.multiImageConfig.multiImageVisionProviderId
+                val multiVisionModel = config.multiImageConfig.multiImageVisionModel
+                val effectiveVisionProvider = (if (multiVisionProviderId != null) {
+                    config.providers.find { it.id == multiVisionProviderId } ?: models.visionProvider
+                } else models.visionProvider)
+                    ?: error("多图模式需要配置视觉模型")
+                val effectiveVisionModel = multiVisionModel?.ifBlank { null } ?: models.visionModel
+
+                val mergeEnabled = config.multiImageConfig.multiImageMergeEnabled
+                val sectionLabel = models.assistant.sectionLabel
+
+                val allExtracted: StringBuilder
+                val allAnswers: StringBuilder
+                var hasAnyContent = false
+
+                if (mergeEnabled) {
+                    val imagesBase64 = bitmaps.map { it.toBase64Jpeg() }
+                    onQueryExtracted("多图合并分析\n")
+
+                    val extractedText = collectTextStream(
+                        provider = effectiveVisionProvider,
+                        model = effectiveVisionModel,
+                        systemPrompt = Prompts.EXTRACTION_SYSTEM_PROMPT,
+                        userPrompt = models.assistant.ocrPrompt,
+                        imagesBase64 = imagesBase64,
+                        firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
+                        onDelta = onQueryExtracted
+                    )
+                    hasAnyContent = extractedText.isNotBlank()
+                    allExtracted = StringBuilder(extractedText)
+
+                    val answer = collectTextStream(
+                        provider = effectiveVisionProvider,
+                        model = effectiveVisionModel,
+                        systemPrompt = Prompts.ANALYSIS_SYSTEM_PROMPT,
+                        userPrompt = "${models.assistant.visionPrompt}\n\n文字提取参考：\n$extractedText",
+                        imagesBase64 = imagesBase64,
+                        firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
+                        onDelta = onDelta
+                    )
+                    allAnswers = StringBuilder(answer)
+                } else {
+                    allExtracted = StringBuilder()
+                    allAnswers = StringBuilder()
+
+                    bitmaps.forEachIndexed { index, bitmap ->
+                        val n = index + 1
+                        val imageB64 = bitmap.toBase64Jpeg()
+
+                        onPageStart(index)
+
+                        onQueryExtracted("${sectionLabel}$n\n")
+
+                        val extracted = collectTextStream(
+                            provider = effectiveVisionProvider,
+                            model = effectiveVisionModel,
+                            systemPrompt = Prompts.EXTRACTION_SYSTEM_PROMPT,
+                            userPrompt = models.assistant.ocrPrompt,
+                            imagesBase64 = listOf(imageB64),
+                            firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
+                            onDelta = onQueryExtracted
+                        )
+                        onQueryExtracted("\n")
+
+                        if (extracted.isNotBlank()) hasAnyContent = true
+                        allExtracted.appendLine("${sectionLabel}$n:")
+                        allExtracted.appendLine(extracted)
+
+                        onDelta("## ${sectionLabel} $n\n")
+                        val answer = collectTextStream(
+                            provider = effectiveVisionProvider,
+                            model = effectiveVisionModel,
+                            systemPrompt = Prompts.ANALYSIS_SYSTEM_PROMPT,
+                            userPrompt = "${models.assistant.visionPrompt}\n\n文字提取参考：\n$extracted",
+                            imagesBase64 = listOf(imageB64),
+                            firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
+                            onDelta = onDelta
+                        )
+                        onDelta("\n\n")
+                        allAnswers.appendLine("## ${sectionLabel} $n")
+                        allAnswers.appendLine(answer)
+                        allAnswers.appendLine()
+
+                        onImageComplete?.invoke(index, answer)
+                    }
+                }
+
+                var automationAction: AutomationAction? = null
+                if (allExtracted.isNotBlank()) {
+                    try {
+                        val autoText = collectTextStream(
+                            provider = effectiveVisionProvider,
+                            model = effectiveVisionModel,
+                            systemPrompt = Prompts.AUTOMATION_SYSTEM_PROMPT,
+                            userPrompt = "请识别题型并给出答案。参考以下内容：\n${allExtracted}",
+                            imagesBase64 = emptyList(),
+                            firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
+                            onDelta = { _ -> }
+                        )
+                        automationAction = ResponseParser.parseAutomationResponse(autoText)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        Log.e("ProcessingPipeline", "Multi-image automation failed", e)
+                    }
+                }
+
+                summaryDeferred.await()
+
+                if (!hasAnyContent && automationAction == null) {
+                    return@coroutineScope base.copy(
+                        status = ProcessingStatus.FAILURE,
+                        detail = "未从多张截图中发现可处理的有效内容"
+                    )
+                }
+
+                base.copy(
+                    status = ProcessingStatus.SUCCESS,
+                    extractedText = allExtracted.toString(),
+                    answer = allAnswers.toString(),
+                    automationAction = automationAction,
+                    detail = "多图分析完成"
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                base.copy(status = ProcessingStatus.FAILURE, detail = e.message ?: "未知错误")
+            }
         }
     }
 
-    /**
-     * 通用的流式文本收集器。
-     */
     private suspend fun collectTextStream(
         provider: ModelProvider,
         model: String,
@@ -364,13 +491,4 @@ class ProcessingPipeline(
         }
         return text.toString()
     }
-}
-
-/**
- * Bitmap 转 Base64。
- */
-private fun Bitmap.toBase64Jpeg(quality: Int = 85): String {
-    val output = ByteArrayOutputStream()
-    compress(Bitmap.CompressFormat.JPEG, quality, output)
-    return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
 }

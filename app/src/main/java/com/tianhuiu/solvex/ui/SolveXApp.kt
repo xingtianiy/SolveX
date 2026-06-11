@@ -33,6 +33,7 @@ import com.tianhuiu.solvex.ui.settings.AssistantEditScreen
 import com.tianhuiu.solvex.ui.settings.GeneralSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ImportExportSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ModelSettingsScreen
+import com.tianhuiu.solvex.ui.settings.MultiImageSettingsScreen
 import com.tianhuiu.solvex.ui.settings.PermissionSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ProviderEditScreen
 import com.tianhuiu.solvex.ui.settings.QuickModeSettingsScreen
@@ -153,6 +154,12 @@ fun SolveXApp(viewModel: MainViewModel) {
                 }
                 composable("settings/quick") {
                     QuickModeSettingsScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable("settings/multi_image") {
+                    MultiImageSettingsScreen(
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() }
                     )

@@ -3,6 +3,7 @@ package com.tianhuiu.solvex.ui.settings
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -90,7 +92,7 @@ fun GeneralSettingsScreen(
                     )
                     SettingsItem(
                         label = "无障碍截图",
-                        subLabel = "通过无障碍服务截取屏幕，一次授权后续静默截图",
+                        subLabel = "通过无障碍服务截取屏幕，授权后将静默截图",
                         icon = Icons.Default.AccessibilityNew,
                         trailing = {
                             RadioButton(
@@ -167,7 +169,7 @@ fun GeneralSettingsScreen(
                     )
                     SettingsItem(
                         label = "隐藏悬浮球",
-                        subLabel = "开启后悬浮球在无操作时将自动隐藏到屏幕边缘",
+                        subLabel = "开启后在无操作时将自动隐藏到屏幕边缘",
                         icon = Icons.Default.Visibility,
                         trailing = {
                             Switch(
@@ -186,6 +188,24 @@ fun GeneralSettingsScreen(
                                 viewModel.permissions.copy(
                                     enableAutoHideBall = !viewModel.permissions.enableAutoHideBall
                                 )
+                            )
+                        }
+                    )
+                    SettingsItem(
+                        label = "悬浮球大小",
+                        subLabel = "${viewModel.permissions.ballSizeDp.toInt()}dp（拖动滑块调整）",
+                        icon = Icons.Default.Visibility,
+                        trailing = {
+                            Slider(
+                                value = viewModel.permissions.ballSizeDp,
+                                onValueChange = { newValue ->
+                                    viewModel.updatePermissions(
+                                        viewModel.permissions.copy(ballSizeDp = newValue)
+                                    )
+                                },
+                                valueRange = 24f..64f,
+                                steps = 0,
+                                modifier = Modifier.width(120.dp)
                             )
                         }
                     )

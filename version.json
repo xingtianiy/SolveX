@@ -1,12 +1,16 @@
 {
-  "versionCode": 3,
-  "versionName": "0.0.3-alpha",
-  "releaseDate": "2026-06-11",
+  "versionCode": 4,
+  "versionName": "0.0.4-alpha",
+  "releaseDate": "2026-06-13",
   "level": "critical",
-  "apkSize": "16 MB",
+  "apkSize": "15.8 MB",
   "updateLog": [
-    "优化多项用户体验"
+    "新增悬浮球大小自定义调节与答案显示优化",
+    "增强多图模式：逐张悬浮球答案同步答案滚动",
+    "优化多图通知为完整答案汇总推送及设置简化",
+    "修复多图终止后截图残留与通知点击抽屉空白",
+    "优化模型输出格式系统提示词与助手提示词规范"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.3-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.3-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.4-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.4-alpha/app-release.apk"
 }

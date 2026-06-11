@@ -2,8 +2,14 @@ package com.tianhuiu.solvex.utils
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import kotlin.math.log10
 import kotlin.math.pow
@@ -74,4 +80,45 @@ object FileUtils {
             "读取教程内容失败: ${e.message}"
         }
     }
+}
+
+/** Bitmap 解码采样尺寸计算 */
+fun BitmapFactory.Options.calculateInSampleSize(reqWidth: Int, reqHeight: Int): Int {
+    val height = outHeight
+    val width = outWidth
+    var inSampleSize = 1
+    if (height > reqHeight || width > reqWidth) {
+        val halfHeight = height / 2
+        val halfWidth = width / 2
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+    return inSampleSize
+}
+
+/** Bitmap 转 Base64 JPEG */
+fun Bitmap.toBase64Jpeg(quality: Int = 85): String {
+    val output = ByteArrayOutputStream()
+    compress(Bitmap.CompressFormat.JPEG, quality, output)
+    return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+}
+
+/** 两步解码：先读取尺寸计算采样比例，再解码为 Bitmap */
+fun decodeSampledBitmap(path: String, maxWidth: Int, maxHeight: Int): Bitmap? {
+    return try {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, options)
+        options.inSampleSize = options.calculateInSampleSize(maxWidth, maxHeight)
+        options.inJustDecodeBounds = false
+        BitmapFactory.decodeFile(path, options)
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** 使用应用默认格式和时区格式化时间戳 */
+fun formatTimestamp(timestamp: Long): String {
+    val dateFormat = SimpleDateFormat("yyyy MM-dd HH:mm:ss", Locale.getDefault())
+    return dateFormat.format(Date(timestamp))
 }

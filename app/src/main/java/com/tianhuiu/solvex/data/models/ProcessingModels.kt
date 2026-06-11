@@ -2,9 +2,6 @@ package com.tianhuiu.solvex.data.models
 
 import kotlinx.serialization.Serializable
 
-/**
- * 任务处理状态。
- */
 @Serializable
 enum class ProcessingStatus {
     RUNNING,
@@ -21,9 +18,6 @@ enum class ProcessingRoute {
     MULTIMODAL_DIRECT  // 视觉模式：直接进行多模态分析
 }
 
-/**
- * 处理过程中的子事件。
- */
 @Serializable
 data class ProcessingEvent(
     val title: String,
@@ -31,29 +25,24 @@ data class ProcessingEvent(
     val timestamp: Long = System.currentTimeMillis(),
 )
 
-/**
- * 自动化动作模型。
- */
 @Serializable
 data class AutomationAction(
-    val type: String, // "set_clipboard" 或 "show_bubble_letters"
+    val type: String,
     val text: String
-)
+) {
+    companion object {
+        const val TYPE_CLIPBOARD = "set_clipboard"
+        const val TYPE_BUBBLE = "show_bubble_letters"
+    }
+}
 
-/**
- * 结构化题目提取模型。
- */
 @Serializable
 data class ExtractedQuestion(
     val type: String? = null,
     val question: String? = null,
     val options: List<String>? = null,
-    val image_analysis: String? = null
 )
 
-/**
- * 完整的一次处理结果对象。
- */
 @Serializable
 data class ProcessingResult(
     val id: String,

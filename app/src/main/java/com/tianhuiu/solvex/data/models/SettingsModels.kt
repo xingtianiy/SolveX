@@ -29,11 +29,9 @@ enum class EngineType(val displayName: String) {
 enum class ProjectMode(val displayName: String, val description: String) {
     STUDY_MODE("常规模式", "展示解题思路和答案片段"),
     QUICK_MODE("自动模式", "悬浮球展示选择题答案/填空题自动复制"),
+    MULTI_IMAGE_MODE("多图模式", "多张截图综合分析"),
 }
 
-/**
- * 模型提供方配置。
- */
 @Serializable
 data class ModelProvider(
     val id: String,
@@ -47,9 +45,6 @@ data class ModelProvider(
     val defaultVisionModel: String = "",
 )
 
-/**
- * 智能助手身份配置。
- */
 @Serializable
 data class AssistantConfig(
     val id: String,
@@ -57,71 +52,107 @@ data class AssistantConfig(
     val ocrPrompt: String,
     val textPrompt: String,
     val visionPrompt: String,
+    val sectionLabel: String = "题目",
 )
 
-/**
- * 抽屉弹出侧边。
- */
 @Serializable
 enum class DrawerSide(val displayName: String) {
     LEFT("左侧"),
     RIGHT("右侧")
 }
 
-/**
- * 抽屉设置。
- */
 @Serializable
 data class DrawerSettings(
     val side: DrawerSide = DrawerSide.LEFT,
-    val widthPercent: Float = 0.8f // 0.3 to 0.9
+    val widthPercent: Float = 0.9f // 0.3 to 0.9
 )
 
-/**
- * 权限及基础设置。
- */
 @Serializable
 data class PermissionSettings(
     val allowNotificationNormal: Boolean = true,
     val allowNotificationAuto: Boolean = true,
     val enableAutoHideBall: Boolean = true,
     val captureMode: String = CaptureMode.SYSTEM,
-    val drawerSettings: DrawerSettings = DrawerSettings()
+    val drawerSettings: DrawerSettings = DrawerSettings(),
+    val ballSizeDp: Float = 42f,
 )
 
 /**
- * 常规学习模式下的具体工作流配置。
+ * 模式配置公共接口。新增模式只需实现此接口并在 AppConfig.getModeConfig() 中添加分支。
  */
+interface IModeConfig {
+    val allowNotification: Boolean
+    val showFloatingToast: Boolean
+    val autoOpenDrawer: Boolean
+    val showScreenshotInRealtime: Boolean
+    val cropBeforeProcessing: Boolean
+    val multiImageEnabled: Boolean
+    val ocrProviderId: String?
+    val ocrModel: String?
+    val textProviderId: String?
+    val textModel: String?
+    val visionProviderId: String?
+    val visionModel: String?
+    val firstDeltaTimeoutSeconds: Long
+}
+
 @Serializable
 data class StudyModeConfig(
-    val allowNotification: Boolean = true,
-    val showFloatingToast: Boolean = true,
-    val autoOpenDrawer: Boolean = true,
-    val ocrProviderId: String? = null,
-    val ocrModel: String? = null,
-    val textProviderId: String? = null,
-    val textModel: String? = null,
-    val visionProviderId: String? = null,
-    val visionModel: String? = null,
-    val firstDeltaTimeoutSeconds: Long = 10,
-)
+    override val allowNotification: Boolean = true,
+    override val showFloatingToast: Boolean = true,
+    override val autoOpenDrawer: Boolean = true,
+    override val showScreenshotInRealtime: Boolean = true,
+    override val cropBeforeProcessing: Boolean = true,
+    override val multiImageEnabled: Boolean = false,
+    override val ocrProviderId: String? = null,
+    override val ocrModel: String? = null,
+    override val textProviderId: String? = null,
+    override val textModel: String? = null,
+    override val visionProviderId: String? = null,
+    override val visionModel: String? = null,
+    override val firstDeltaTimeoutSeconds: Long = 10,
+) : IModeConfig
 
-/**
- * 自动模式下的具体工作流配置。
- */
 @Serializable
 data class QuickModeConfig(
-    val allowNotification: Boolean = true,
-    val showFloatingToast: Boolean = true,
-    val autoOpenDrawer: Boolean = false,
-    val ocrProviderId: String? = null,
-    val ocrModel: String? = null,
-    val textProviderId: String? = null,
-    val textModel: String? = null,
-    val visionProviderId: String? = null,
-    val visionModel: String? = null,
-    val firstDeltaTimeoutSeconds: Long = 10,
-)
+    override val allowNotification: Boolean = true,
+    override val showFloatingToast: Boolean = true,
+    override val autoOpenDrawer: Boolean = false,
+    override val showScreenshotInRealtime: Boolean = true,
+    override val cropBeforeProcessing: Boolean = false,
+    override val multiImageEnabled: Boolean = true,
+    val multiImageCropEnabled: Boolean = false,
+    override val ocrProviderId: String? = null,
+    override val ocrModel: String? = null,
+    override val textProviderId: String? = null,
+    override val textModel: String? = null,
+    override val visionProviderId: String? = null,
+    override val visionModel: String? = null,
+    override val firstDeltaTimeoutSeconds: Long = 10,
+) : IModeConfig
+
+/** 多图模式专属配置 */
+@Serializable
+data class MultiImageModeConfig(
+    override val allowNotification: Boolean = true,
+    override val showFloatingToast: Boolean = true,
+    override val autoOpenDrawer: Boolean = true,
+    override val showScreenshotInRealtime: Boolean = true,
+    override val cropBeforeProcessing: Boolean = false,
+    override val multiImageEnabled: Boolean = false,
+    val multiImageMergeEnabled: Boolean = false,
+    val multiImageVisionProviderId: String? = null,
+    val multiImageVisionModel: String? = null,
+    val multiImageCropEnabled: Boolean = false,
+    val multiImageAutoOpenDrawer: Boolean = true,
+    override val ocrProviderId: String? = null,
+    override val ocrModel: String? = null,
+    override val textProviderId: String? = null,
+    override val textModel: String? = null,
+    override val visionProviderId: String? = null,
+    override val visionModel: String? = null,
+    override val firstDeltaTimeoutSeconds: Long = 10,
+) : IModeConfig
 
 /**
  * 截屏模式常量。
@@ -130,18 +161,8 @@ object CaptureMode {
     const val SYSTEM = "system"
     const val ACCESSIBILITY = "accessibility"
     const val SHIZUKU = "shizuku"
-
-    fun toDisplayName(mode: String?): String = when (mode) {
-        SHIZUKU -> "Shizuku ADB"
-        ACCESSIBILITY -> "无障碍截图"
-        SYSTEM -> "系统录屏"
-        else -> mode ?: "未知"
-    }
 }
 
-/**
- * 全局应用配置根对象。
- */
 @Serializable
 data class AppConfig(
     val providers: List<ModelProvider> = emptyList(),
@@ -149,9 +170,19 @@ data class AppConfig(
     val permissions: PermissionSettings = PermissionSettings(),
     val studyConfig: StudyModeConfig = StudyModeConfig(),
     val quickConfig: QuickModeConfig = QuickModeConfig(),
+    val multiImageConfig: MultiImageModeConfig = MultiImageModeConfig(),
     val defaultProviderId: String? = null,
     val selectedAssistantId: String? = null,
     val selectedEngine: EngineType = EngineType.VISION_ENGINE,
     val selectedMode: ProjectMode = ProjectMode.STUDY_MODE,
     val autoScrollContent: Boolean = true,
 )
+
+/** 按模式获取对应配置 */
+fun AppConfig.getModeConfig(mode: ProjectMode? = null): IModeConfig {
+    return when (mode ?: selectedMode) {
+        ProjectMode.STUDY_MODE -> studyConfig
+        ProjectMode.QUICK_MODE -> quickConfig
+        ProjectMode.MULTI_IMAGE_MODE -> multiImageConfig
+    }
+}

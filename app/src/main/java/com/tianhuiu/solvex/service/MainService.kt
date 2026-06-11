@@ -27,23 +27,26 @@ import com.tianhuiu.solvex.data.models.EngineType
 import com.tianhuiu.solvex.data.models.HistoryItem
 import com.tianhuiu.solvex.data.models.ProcessingStatus
 import com.tianhuiu.solvex.data.models.ProjectMode
+import com.tianhuiu.solvex.data.models.getModeConfig
 import com.tianhuiu.solvex.floating.BallStatus
 import com.tianhuiu.solvex.floating.CropManager
 import com.tianhuiu.solvex.floating.DrawerManager
 import com.tianhuiu.solvex.floating.FloatingBallManager
-import com.tianhuiu.solvex.utils.AutomationTools
-import com.tianhuiu.solvex.utils.NotificationUtils
-import com.tianhuiu.solvex.utils.VibrationUtils
+import com.tianhuiu.solvex.utils.NotificationHelper
+import com.tianhuiu.solvex.utils.ResponseParser
+import com.tianhuiu.solvex.utils.SystemUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -72,7 +75,10 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     private var cropManager: CropManager? = null
     private var currentHistoryId: String? = null
     private var processingJob: Job? = null
+    private var cycleJob: Job? = null
     private var captureEngine: ScreenCaptureEngine? = null
+    private var isMultiImageMode = false
+    private val multiImageBuffer = mutableListOf<android.graphics.Bitmap>()
     private lateinit var repository: SettingsRepository
     private lateinit var historyRepository: HistoryRepository
 
@@ -92,28 +98,29 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
         // 清理意外中断的任务
         lifecycle.coroutineScope.launch {
-            historyRepository.cleanupProcessingItems(
-                query = "用户已关闭软件",
-                result = "程序意外终止或手动清理后台导致任务取消"
-            )
+            historyRepository.cleanupProcessingItems()
         }
 
         val pipeline = container.processingPipeline
-        drawerManager = DrawerManager(this, historyRepository)
+        drawerManager = DrawerManager(this, historyRepository, lifecycle.coroutineScope)
         cropManager = CropManager(this)
 
         floatingBallManager = FloatingBallManager(this).apply {
             onSingleClick = {
-                if (processingJob?.isActive == true) {
+                if (this@MainService.isMultiImageMode) {
+                    this@MainService.captureAndBuffer()
+                } else if (processingJob?.isActive == true) {
                     currentHistoryId?.let { id ->
                         lifecycle.coroutineScope.launch {
                             val config = repository.appConfigFlow.first()
+                            val showScreenshot = config.getModeConfig().showScreenshotInRealtime
                             drawerManager?.show(
                                 historyId = id,
                                 side = config.permissions.drawerSettings.side,
                                 widthPercent = config.permissions.drawerSettings.widthPercent,
                                 showMetadata = false,
-                                autoScrollEnabled = config.autoScrollContent
+                                autoScrollEnabled = config.autoScrollContent,
+                                showScreenshotEnabled = showScreenshot
                             )
                         }
                     }
@@ -134,12 +141,12 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                             }
 
                             if (bitmap != null) {
-                                VibrationUtils.vibrateSuccess(this@MainService)
+                                SystemUtils.vibrateSuccess(this@MainService)
                                 val config = repository.appConfigFlow.first()
 
                                 // 常规学习模式：弹出裁剪界面让用户选取重要区域
                                 var image: android.graphics.Bitmap = bitmap
-                                if (config.selectedMode == ProjectMode.STUDY_MODE) {
+                                if (config.getModeConfig().cropBeforeProcessing) {
                                     cropManager?.let { manager ->
                                         val cropped = manager.crop(image)
                                         if (cropped == null) {
@@ -154,7 +161,6 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                     }
                                 }
 
-                                // 创建初始记录
                                 val models = pipeline.resolveModels(config)
                                 val initialResult =
                                     pipeline.createBaseResult(models, image, "正在获取题目...")
@@ -162,7 +168,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 currentHistoryId = historyId
                                 val historyItem = HistoryItem(
                                     id = historyId,
-                                    query = "屏幕解析",
+                                    query = "正在处理...",
                                     result = "正在处理...",
                                     imagePath = initialResult.screenshotPath,
                                     mode = config.selectedMode.displayName,
@@ -176,12 +182,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                 try {
                                     // 检查是否需要自动打开抽屉
-                                    val autoOpen =
-                                        if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                            config.studyConfig.autoOpenDrawer
-                                        } else {
-                                            config.quickConfig.autoOpenDrawer
-                                        }
+                                    val autoOpen = config.getModeConfig().autoOpenDrawer
+                                    val showScreenshot = config.getModeConfig().showScreenshotInRealtime
 
                                     if (autoOpen) {
                                         lifecycle.coroutineScope.launch {
@@ -189,7 +191,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                                 historyId = historyId,
                                                 side = config.permissions.drawerSettings.side,
                                                 widthPercent = config.permissions.drawerSettings.widthPercent,
-                                                showMetadata = false
+                                                showMetadata = false,
+                                                showScreenshotEnabled = showScreenshot
                                             )
                                         }
                                     }
@@ -228,15 +231,11 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                                 }
                                             },
                                             onQueryExtracted = { delta ->
-                                                if (currentQueryText.isEmpty()) currentQueryText =
-                                                    ""
                                                 currentQueryText += delta
                                                 drawerManager?.appendLiveQuery(delta)
                                                 scheduleUpdate()
                                             },
                                             onDelta = { delta ->
-                                                if (currentResultText.isEmpty()) currentResultText =
-                                                    ""
                                                 currentResultText += delta
                                                 drawerManager?.appendLiveResult(delta)
                                                 scheduleUpdate()
@@ -249,28 +248,31 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                         if (result.status == ProcessingStatus.SUCCESS) {
                                             updateStatus(BallStatus.SUCCESS)
-                                            VibrationUtils.vibrateSuccess(this@MainService)
+                                            SystemUtils.vibrateSuccess(this@MainService)
 
                                             // 执行自动化动作
                                             val action = result.automationAction ?: run {
                                                 // 备选方案：从常规答案提取最终答案并复制
                                                 val finalAnswer =
-                                                    NotificationUtils.extractFinalAnswer(
+                                                    ResponseParser.extractFinalAnswer(
                                                         result.answer ?: ""
                                                     )
                                                 if (finalAnswer.isNotBlank()) {
-                                                    AutomationAction("set_clipboard", finalAnswer)
+                                                    AutomationAction(
+                                                        AutomationAction.TYPE_CLIPBOARD,
+                                                        finalAnswer
+                                                    )
                                                 } else null
                                             }
 
                                             action?.let { act ->
                                                 when (act.type) {
-                                                    "show_bubble_letters" -> {
+                                                    AutomationAction.TYPE_BUBBLE -> {
                                                         floatingBallManager?.showText(act.text)
                                                     }
 
-                                                    "set_clipboard" -> {
-                                                        AutomationTools.copyToClipboard(
+                                                    AutomationAction.TYPE_CLIPBOARD -> {
+                                                        SystemUtils.copyToClipboard(
                                                             this@MainService,
                                                             act.text
                                                         )
@@ -283,12 +285,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                             val currentHistory =
                                                 historyRepository.historyItemsFlow.first()
                                                     .find { it.id == historyId }
-                                            val allowNotification =
-                                                if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                                    config.studyConfig.allowNotification
-                                                } else {
-                                                    config.quickConfig.allowNotification
-                                                }
+                                            val allowNotification = config.getModeConfig().allowNotification
 
                                             if (allowNotification) {
                                                 val notifyTitle =
@@ -297,8 +294,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                                     result.answer ?: result.automationThought
                                                     ?: "已获取最终答案"
                                                 val notifyContent =
-                                                    NotificationUtils.extractFinalAnswer(rawAnswer)
-                                                NotificationUtils.sendResultNotification(
+                                                    ResponseParser.extractFinalAnswer(rawAnswer)
+                                                NotificationHelper.sendResultNotification(
                                                     this@MainService,
                                                     notifyTitle,
                                                     notifyContent,
@@ -317,18 +314,13 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                             }
                                         } else {
                                             updateStatus(BallStatus.ERROR)
-                                            VibrationUtils.vibrateError(this@MainService)
+                                            SystemUtils.vibrateError(this@MainService)
 
                                             // 发送失败通知
-                                            val allowNotification =
-                                                if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                                    config.studyConfig.allowNotification
-                                                } else {
-                                                    config.quickConfig.allowNotification
-                                                }
+                                            val allowNotification = config.getModeConfig().allowNotification
 
                                             if (allowNotification) {
-                                                NotificationUtils.sendResultNotification(
+                                                NotificationHelper.sendResultNotification(
                                                     this@MainService,
                                                     "解析失败",
                                                     result.detail,
@@ -338,6 +330,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                             historyRepository.updateHistoryItem(historyId) { current ->
                                                 current.copy(
+                                                    query = result.detail,
                                                     result = result.detail,
                                                     status = AnalysisStatus.FAILURE
                                                 )
@@ -375,16 +368,11 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 }
                                 android.util.Log.e("SolveX", "截图失败: $captureHint")
                                 updateStatus(BallStatus.ERROR)
-                                VibrationUtils.vibrateError(this@MainService)
+                                SystemUtils.vibrateError(this@MainService)
 
-                                val allowNotification =
-                                    if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                        config.studyConfig.allowNotification
-                                    } else {
-                                        config.quickConfig.allowNotification
-                                    }
+                                val allowNotification = config.getModeConfig().allowNotification
                                 if (allowNotification) {
-                                    NotificationUtils.sendResultNotification(
+                                    NotificationHelper.sendResultNotification(
                                         this@MainService,
                                         "截图失败",
                                         captureHint
@@ -395,12 +383,13 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                         } catch (e: Exception) {
                             android.util.Log.e("SolveX", "流程异常", e)
                             updateStatus(BallStatus.ERROR)
-                            VibrationUtils.vibrateError(this@MainService)
+                            SystemUtils.vibrateError(this@MainService)
 
                             currentHistoryId?.let { historyId ->
                                 lifecycle.coroutineScope.launch {
                                     historyRepository.updateHistoryItem(historyId) { current ->
                                         current.copy(
+                                            query = e.message ?: "未知错误",
                                             result = e.message ?: "未知错误",
                                             status = AnalysisStatus.FAILURE
                                         )
@@ -410,14 +399,9 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                             try {
                                 val config = repository.appConfigFlow.first()
-                                val allowNotification =
-                                    if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                        config.studyConfig.allowNotification
-                                    } else {
-                                        config.quickConfig.allowNotification
-                                    }
+                                val allowNotification = config.getModeConfig().allowNotification
                                 if (allowNotification) {
-                                    NotificationUtils.sendResultNotification(
+                                    NotificationHelper.sendResultNotification(
                                         this@MainService,
                                         "解析异常",
                                         e.message ?: "未知错误"
@@ -433,19 +417,39 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                 }
             }
             onDoubleClick = {
-                processingJob?.cancel()
-                processingJob = null
-                updateStatus(BallStatus.IDLE)
+                if (this@MainService.isMultiImageMode) {
+                    this@MainService.cancelMultiImageMode()
+                } else {
+                    processingJob?.cancel()
+                    processingJob = null
+                    updateStatus(BallStatus.IDLE)
+                }
             }
             onLongClick = {
-                VibrationUtils.vibrate(this@MainService, 50)
-                switchEngine()
+                if (this@MainService.isMultiImageMode) {
+                    if (this@MainService.multiImageBuffer.isNotEmpty()) {
+                        this@MainService.sendMultiImageBuffer()
+                    }
+                } else {
+                    SystemUtils.vibrate(this@MainService, 50)
+                    lifecycle.coroutineScope.launch {
+                        val config = repository.appConfigFlow.first()
+                        if (config.getModeConfig().multiImageEnabled
+                            && processingJob?.isActive != true
+                        ) {
+                            this@MainService.enterMultiImageMode()
+                        } else {
+                            switchEngine()
+                        }
+                    }
+                }
             }
         }
 
         lifecycle.coroutineScope.launch {
             repository.appConfigFlow.collect { config ->
                 floatingBallManager?.enableAutoHide = config.permissions.enableAutoHideBall
+                floatingBallManager?.setBallSize(config.permissions.ballSizeDp)
             }
         }
     }
@@ -459,8 +463,388 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                 EngineType.VISION_ENGINE
             }
             repository.saveAppConfig(config.copy(selectedEngine = newEngine))
-            VibrationUtils.vibrate(this@MainService, 100)
+            SystemUtils.vibrate(this@MainService, 100)
         }
+    }
+
+    private fun enterMultiImageMode() {
+        isMultiImageMode = true
+        multiImageBuffer.forEach { bitmap ->
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+        multiImageBuffer.clear()
+        floatingBallManager?.enterMultiImageMode()
+        SystemUtils.vibrate(this@MainService, 50)
+    }
+
+    private fun captureAndBuffer() {
+        lifecycle.coroutineScope.launch {
+            floatingBallManager?.tempHide()
+            delay(100)
+            val bitmap = try {
+                captureEngine?.capture()
+            } finally {
+                floatingBallManager?.restore()
+            }
+            if (bitmap != null) {
+                var image: android.graphics.Bitmap = bitmap
+                val config = repository.appConfigFlow.first()
+                if (config.quickConfig.multiImageCropEnabled) {
+                    cropManager?.let { manager ->
+                        val cropped = manager.crop(image)
+                        if (cropped == null) return@launch
+                        if (cropped !== image) image.recycle()
+                        image = cropped
+                    }
+                }
+                if (!isMultiImageMode) {
+                    if (!image.isRecycled) image.recycle()
+                    return@launch
+                }
+                multiImageBuffer.add(image)
+                floatingBallManager?.updateBadgeCount(multiImageBuffer.size)
+                SystemUtils.vibrateSuccess(this@MainService)
+            }
+        }
+    }
+
+    private fun sendMultiImageBuffer() {
+        val bitmaps = multiImageBuffer.toList()
+        multiImageBuffer.clear()
+        isMultiImageMode = false
+        floatingBallManager?.exitMultiImageMode()
+
+        if (bitmaps.isEmpty()) return
+
+        val pipeline = (application as SolveXApplication).container.processingPipeline
+        drawerManager?.onPageChanged = null
+        processingJob = lifecycle.coroutineScope.launch {
+            try {
+                floatingBallManager?.updateStatus(BallStatus.RUNNING)
+                SystemUtils.vibrateSuccess(this@MainService)
+
+                val config = repository.appConfigFlow.first()
+
+                // 创建初始记录（使用第一张图作为主截图）
+                val models = pipeline.resolveModels(config)
+                val initialResult = pipeline.createBaseResult(models, bitmaps.first(), "正在处理多张截图...", bitmaps.drop(1))
+                val historyId = initialResult.id
+                currentHistoryId = historyId
+                val historyItem = HistoryItem(
+                    id = historyId,
+                    query = "正在处理...",
+                    result = "正在处理...",
+                    imagePath = initialResult.screenshotPath,
+                    imagePaths = initialResult.screenshotPaths,
+                    mode = ProjectMode.MULTI_IMAGE_MODE.displayName,
+                    assistantName = initialResult.assistantName,
+                    providerName = initialResult.modelSummary,
+                    modelName = initialResult.modelSummary,
+                    engineName = config.selectedEngine.displayName,
+                    status = AnalysisStatus.PROCESSING
+                )
+                historyRepository.addHistoryItem(historyItem)
+
+                // 设置抽屉多图路径并标记合并/逐张模式
+                drawerManager?.setImagePaths(initialResult.screenshotPaths)
+                drawerManager?.setMergeMode(config.multiImageConfig.multiImageMergeEnabled)
+
+                // 自动打开抽屉（使用多图模式专用设置）
+                if (config.multiImageConfig.multiImageAutoOpenDrawer) {
+                    lifecycle.coroutineScope.launch {
+                        drawerManager?.show(
+                            historyId = historyId,
+                            side = config.permissions.drawerSettings.side,
+                            widthPercent = config.permissions.drawerSettings.widthPercent,
+                            showMetadata = false,
+                            autoScrollEnabled = config.autoScrollContent,
+                            showScreenshotEnabled = config.quickConfig.showScreenshotInRealtime
+                        )
+                    }
+                }
+
+                try {
+                    var currentQueryText = ""
+                    var currentResultText = ""
+                    var pendingUpdateJob: Job? = null
+
+                    fun scheduleUpdate() {
+                        if (pendingUpdateJob?.isActive == true) return
+                        pendingUpdateJob = lifecycle.coroutineScope.launch(Dispatchers.IO) {
+                            delay(500)
+                            historyRepository.updateHistoryItem(historyId) { current ->
+                                current.copy(
+                                    query = currentQueryText.ifEmpty { current.query },
+                                    result = currentResultText.ifEmpty { current.result }
+                                )
+                            }
+                        }
+                    }
+
+                    val result = pipeline.processMultiImage(
+                        config = config,
+                        bitmaps = bitmaps,
+                        onSummaryGenerated = { title, summary ->
+                            lifecycle.coroutineScope.launch {
+                                historyRepository.updateHistoryItem(historyId) { current ->
+                                    current.copy(title = title, summary = summary)
+                                }
+                            }
+                        },
+                        onQueryExtracted = { delta ->
+                            currentQueryText += delta
+                            drawerManager?.appendLiveQuery(delta)
+                            scheduleUpdate()
+                        },
+                        onDelta = { delta ->
+                            currentResultText += delta
+                            drawerManager?.appendLiveResult(delta)
+                            scheduleUpdate()
+                        },
+                        onPageStart = { page ->
+                            drawerManager?.setProcessingPage(page)
+                        },
+                        onImageComplete = { index, answer ->
+                            val fa = ResponseParser.extractFinalAnswer(answer)
+                            if (fa.isNotBlank()) {
+                                floatingBallManager?.showText(fa)
+                            }
+                        }
+                    )
+
+                    pendingUpdateJob?.cancelAndJoin()
+                    drawerManager?.clearLiveBuffer()
+
+                    if (result.status == ProcessingStatus.SUCCESS) {
+                        floatingBallManager?.updateStatus(BallStatus.SUCCESS)
+                        SystemUtils.vibrateSuccess(this@MainService)
+
+                        val isMergeMode =
+                            config.multiImageConfig.multiImageMergeEnabled && bitmaps.size > 1
+                        val isPerImageMode =
+                            !config.multiImageConfig.multiImageMergeEnabled && bitmaps.size > 1
+
+                        if (isPerImageMode) {
+                            // 逐张模式：onImageComplete 已在每张图完成时显示答案，此处覆盖为首页答案并绑定翻页回调
+                            val sectionLabel =
+                                ResponseParser.detectSectionLabel(result.answer ?: "")
+                            val firstSection = ResponseParser.extractPerQuestionSection(
+                                result.answer ?: "", 1, sectionLabel
+                            )
+                            val firstAnswer = ResponseParser.extractFinalAnswer(
+                                firstSection ?: (result.answer ?: "")
+                            )
+                            if (firstAnswer.isNotBlank()) {
+                                floatingBallManager?.showText(firstAnswer)
+                            } else {
+                                // 回退：无结构化输出时使用自动化工具
+                                val action = result.automationAction ?: run {
+                                    val fa = ResponseParser.extractFinalAnswer(result.answer ?: "")
+                                    if (fa.isNotBlank()) AutomationAction(
+                                        AutomationAction.TYPE_CLIPBOARD,
+                                        fa
+                                    )
+                                    else null
+                                }
+                                action?.let { act ->
+                                    when (act.type) {
+                                        AutomationAction.TYPE_BUBBLE -> floatingBallManager?.showText(
+                                            act.text
+                                        )
+
+                                        AutomationAction.TYPE_CLIPBOARD -> {
+                                            SystemUtils.copyToClipboard(this@MainService, act.text)
+                                            floatingBallManager?.showText("已复制")
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 翻页时更新悬浮球显示对应题目的答案
+                            drawerManager?.onPageChanged = { pageIndex ->
+                                val pageResult = result.answer?.let { fullAnswer ->
+                                    val label = ResponseParser.detectSectionLabel(fullAnswer)
+                                    ResponseParser.extractPerQuestionSection(
+                                        fullAnswer,
+                                        pageIndex + 1,
+                                        label
+                                    )
+                                }
+                                val pageAnswer =
+                                    pageResult?.let { ResponseParser.extractFinalAnswer(it) }
+                                if (!pageAnswer.isNullOrBlank()) {
+                                    floatingBallManager?.showText(pageAnswer)
+                                }
+                            }
+                        } else if (isMergeMode) {
+                            // 合并模式：提取所有 ## 题目 N 的最终答案并循环滚动显示
+                            val sectionLabel =
+                                ResponseParser.detectSectionLabel(result.answer ?: "")
+                            val allAnswers = mutableListOf<String>()
+                            var n = 1
+                            while (true) {
+                                val section = ResponseParser.extractPerQuestionSection(
+                                    result.answer ?: "", n, sectionLabel
+                                )
+                                if (section == null) break
+                                val fa = ResponseParser.extractFinalAnswer(section)
+                                if (fa.isNotBlank()) allAnswers.add(fa)
+                                n++
+                            }
+                            cycleJob?.cancel()
+                            if (allAnswers.size > 1) {
+                                cycleJob = lifecycle.coroutineScope.launch {
+                                    var idx = 0
+                                    while (coroutineContext.isActive) {
+                                        floatingBallManager?.showText(
+                                            "${sectionLabel}${idx + 1}: ${allAnswers[idx]}",
+                                            persistent = true
+                                        )
+                                        delay(3500)
+                                        idx = (idx + 1) % allAnswers.size
+                                    }
+                                }
+                            } else if (allAnswers.size == 1) {
+                                floatingBallManager?.showText(allAnswers[0])
+                            }
+                            drawerManager?.onPageChanged = null
+                        } else {
+                            // 单图模式：使用自动化工具处理悬浮球显示与剪贴板
+                            val action = result.automationAction ?: run {
+                                val finalAnswer =
+                                    ResponseParser.extractFinalAnswer(result.answer ?: "")
+                                if (finalAnswer.isNotBlank()) {
+                                    AutomationAction(AutomationAction.TYPE_CLIPBOARD, finalAnswer)
+                                } else null
+                            }
+
+                            action?.let { act ->
+                                when (act.type) {
+                                    AutomationAction.TYPE_BUBBLE -> {
+                                        floatingBallManager?.showText(act.text)
+                                    }
+
+                                    AutomationAction.TYPE_CLIPBOARD -> {
+                                        SystemUtils.copyToClipboard(this@MainService, act.text)
+                                        floatingBallManager?.showText("已复制")
+                                    }
+                                }
+                            }
+                            drawerManager?.onPageChanged = null
+                        }
+
+                        if (config.multiImageConfig.allowNotification) {
+                            val currentHistory = historyRepository.historyItemsFlow.first()
+                                .find { it.id == historyId }
+                            val notifyTitle = currentHistory?.title ?: "多图解析完成"
+                            val notifyContent = buildString {
+                                val sectionLabel =
+                                    ResponseParser.detectSectionLabel(result.answer ?: "")
+                                var n = 1
+                                while (true) {
+                                    val section = ResponseParser.extractPerQuestionSection(
+                                        result.answer ?: "", n, sectionLabel
+                                    ) ?: break
+                                    val fa = ResponseParser.extractFinalAnswer(section)
+                                    if (fa.isNotBlank()) {
+                                        if (isNotEmpty()) append("\n")
+                                        append("${sectionLabel}$n: $fa")
+                                    }
+                                    n++
+                                }
+                                if (isEmpty()) {
+                                    append(
+                                        ResponseParser.extractFinalAnswer(
+                                            result.answer ?: "已获取最终答案"
+                                        )
+                                    )
+                                }
+                            }
+                            NotificationHelper.sendResultNotification(
+                                this@MainService, notifyTitle, notifyContent, historyId
+                            )
+                        }
+
+                        historyRepository.updateHistoryItem(historyId) { current ->
+                            current.copy(
+                                query = result.extractedText ?: current.query,
+                                result = result.answer ?: "已获取最终答案",
+                                imagePaths = result.screenshotPaths,
+                                status = AnalysisStatus.SUCCESS
+                            )
+                        }
+                    } else {
+                        floatingBallManager?.updateStatus(BallStatus.ERROR)
+                        SystemUtils.vibrateError(this@MainService)
+                        drawerManager?.hide()
+
+                        if (config.multiImageConfig.allowNotification) {
+                            NotificationHelper.sendResultNotification(
+                                this@MainService, "多图解析失败", result.detail, historyId
+                            )
+                        }
+
+                        historyRepository.updateHistoryItem(historyId) { current ->
+                            current.copy(
+                                query = result.detail,
+                                result = result.detail,
+                                status = AnalysisStatus.FAILURE
+                            )
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    cleanupScope.launch {
+                        historyRepository.updateHistoryItem(historyId) { current ->
+                            current.copy(
+                                query = "用户已取消",
+                                result = "用户已取消",
+                                status = AnalysisStatus.CANCELLED
+                            )
+                        }
+                    }
+                    throw e
+                } finally {
+                    bitmaps.forEach { bitmap ->
+                        if (!bitmap.isRecycled) bitmap.recycle()
+                    }
+                }
+            } catch (_: CancellationException) {
+            } catch (e: Exception) {
+                android.util.Log.e("SolveX", "多图流程异常", e)
+                floatingBallManager?.updateStatus(BallStatus.ERROR)
+                SystemUtils.vibrateError(this@MainService)
+                cycleJob?.cancel()
+                drawerManager?.hide()
+                try {
+                    val config = repository.appConfigFlow.first()
+                    if (config.multiImageConfig.allowNotification) {
+                        NotificationHelper.sendResultNotification(
+                            this@MainService, "多图解析异常", e.message ?: "未知错误"
+                        )
+                    }
+                } catch (_: Exception) {
+                }
+            } finally {
+                currentHistoryId = null
+                processingJob = null
+                bitmaps.forEach { bitmap ->
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                }
+            }
+        }
+    }
+
+    private fun cancelMultiImageMode() {
+        multiImageBuffer.forEach { bitmap ->
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+        multiImageBuffer.clear()
+        isMultiImageMode = false
+        drawerManager?.clearLiveBuffer()
+        drawerManager?.onPageChanged = null
+        cycleJob?.cancel()
+        floatingBallManager?.exitMultiImageMode()
+        SystemUtils.vibrate(this@MainService, 50)
     }
 
     override fun onDestroy() {
@@ -483,6 +867,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
             }
         }
         processingJob?.cancel()
+        cycleJob?.cancel()
+        cleanupScope.cancel()
         viewModelStore.clear()
         super.onDestroy()
     }
@@ -497,16 +883,26 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         when (intent?.action) {
             ACTION_START -> startAsForeground(intent)
             ACTION_STOP -> stopSelf()
-            NotificationUtils.ACTION_VIEW_HISTORY -> {
-                val historyId = intent.getStringExtra(NotificationUtils.EXTRA_HISTORY_ID)
+            NotificationHelper.ACTION_VIEW_HISTORY -> {
+                val historyId = intent.getStringExtra(NotificationHelper.EXTRA_HISTORY_ID)
                 if (historyId != null) {
                     lifecycle.coroutineScope.launch {
                         val config = repository.appConfigFlow.first()
+                        val showScreenshot = config.getModeConfig().showScreenshotInRealtime
+                        // 检测是否为合并模式：逐张分析结果含 ## 题目 N 分节标题
+                        val item = historyRepository.historyItemsFlow.first().find { it.id == historyId }
+                        val isMerge = item?.let { hist ->
+                            val sectionLabel = ResponseParser.detectSectionLabel(
+                                hist.result.ifBlank { hist.query })
+                            hist.imagePaths.size > 1 && !hist.result.contains("## $sectionLabel")
+                        } ?: false
+                        drawerManager?.setMergeMode(isMerge)
                         drawerManager?.show(
                             historyId = historyId,
                             side = config.permissions.drawerSettings.side,
                             widthPercent = config.permissions.drawerSettings.widthPercent,
-                            showMetadata = false
+                            showMetadata = false,
+                            showScreenshotEnabled = showScreenshot
                         )
                     }
                 }
