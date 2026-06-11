@@ -15,6 +15,9 @@ class HistoryRepository(private val historyDao: HistoryDao) {
 
     val historyItemsFlow: Flow<List<HistoryItem>> = historyDao.getAllHistoryItems()
 
+    fun getHistoryItemByIdFlow(id: String): Flow<HistoryItem?> =
+        historyDao.getHistoryItemByIdFlow(id)
+
     suspend fun getHistoryItemsPaged(page: Int, pageSize: Int): List<HistoryItem> {
         return historyDao.getHistoryItemsPaged(pageSize, page * pageSize)
     }

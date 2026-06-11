@@ -8,21 +8,26 @@ import com.tianhuiu.solvex.network.ProviderAdapter
 import com.tianhuiu.solvex.network.SseStreamClient
 import com.tianhuiu.solvex.network.StreamRequest
 import com.tianhuiu.solvex.network.ToolRegistry
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.*
-import okhttp3.OkHttpClient
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * OpenAI Chat Completions API 适配器。
- * 使用 SSE 流式端点 POST /chat/completions。
  */
 class OpenAiChatAdapter(
     private val client: OkHttpClient,

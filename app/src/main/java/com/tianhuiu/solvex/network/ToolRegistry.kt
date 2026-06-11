@@ -1,10 +1,16 @@
 package com.tianhuiu.solvex.network
 
 import com.tianhuiu.solvex.data.models.ProviderKind
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
- * 工具注册表：定义可供模型调用的工具函数，并负责将其格式化为不同提供商要求的 JSON 结构。
+ * 工具注册表。
  */
 internal object ToolRegistry {
 

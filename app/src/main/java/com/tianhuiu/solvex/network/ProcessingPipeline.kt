@@ -27,7 +27,7 @@ import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 /**
- * 处理管道：协调截图、摘要生成、题目提取及最终解答的完整流程。
+ * 处理管道。
  */
 class ProcessingPipeline(
     private val appContext: Context,
@@ -338,7 +338,7 @@ class ProcessingPipeline(
         firstDeltaTimeoutMillis: Long,
         onDelta: (String) -> Unit
     ): String {
-        val text = StringBuilder("")
+        val text = StringBuilder(4096)
         unifiedClient.stream(
             provider = provider,
             model = model,

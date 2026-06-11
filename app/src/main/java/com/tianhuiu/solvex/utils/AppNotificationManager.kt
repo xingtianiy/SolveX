@@ -1,9 +1,9 @@
 package com.tianhuiu.solvex.utils
 
+import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.data.models.InAppNotification
 import com.tianhuiu.solvex.data.models.NotificationType
 import com.tianhuiu.solvex.data.models.PermissionType
-import com.tianhuiu.solvex.data.models.CaptureMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -96,7 +96,7 @@ class AppNotificationManager {
                 )
             }
 
-            // 3. 混合并排序，支持最多 3 条，确保就绪通知能看到
+            // 排序并限制最多 3 条
             sortAndLimit(nextNotifications)
         }
     }

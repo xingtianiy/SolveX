@@ -8,73 +8,28 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class VersionInfo(
 
-    /**
-     * 版本号（用于比较更新）
-     *
-     * 当前安装版本：
-     * BuildConfig.VERSION_CODE
-     *
-     * 服务端版本：
-     * versionCode
-     *
-     * versionCode > BuildConfig.VERSION_CODE
-     * 则提示更新
-     */
+    /** 版本号 */
     val versionCode: Int,
 
-    /**
-     * 版本名称
-     *
-     * 示例：
-     * 0.0.1-alpha
-     * 0.0.1-beta
-     * 0.0.1
-     * 1.0.0
-     */
+    /** 版本名称 */
     val versionName: String,
 
-    /**
-     * 发布时间
-     *
-     * 格式：
-     * yyyy-MM-dd
-     */
+    /** 发布日期（yyyy-MM-dd） */
     val releaseDate: String,
 
-    /**
-     * 是否强制更新
-     *
-     * true：
-     * 用户必须更新
-     *
-     * false：
-     * 可以跳过
-     */
+    /** 是否强制更新 */
     val forceUpdate: Boolean = false,
 
-    /**
-     * APK大小
-     *
-     * 用于更新弹窗显示
-     *
-     * 示例：
-     * 25.8 MB
-     */
+    /** APK 大小 */
     val apkSize: String,
 
-    /**
-     * 更新日志
-     */
+    /** 更新日志 */
     val updateLog: List<String>,
 
-    /**
-     * Github APK下载地址
-     */
+    /** GitHub APK 下载地址 */
     val githubUrl: String,
 
-    /**
-     * Gitee APK下载地址
-     */
+    /** Gitee APK 下载地址 */
     val giteeUrl: String
 )
 

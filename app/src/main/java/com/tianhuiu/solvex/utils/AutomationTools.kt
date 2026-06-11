@@ -35,7 +35,7 @@ object AutomationTools {
             val type = obj["type"]?.jsonPrimitive?.content ?: "other"
             val rawAnswer = obj["answer"]?.jsonPrimitive?.content ?: ""
 
-            // 处理答案中的缩进和多余空白，特别是某些模型返回的 A B C 格式
+            // 规范化空白
             val answer = if (type.lowercase() == "choice") {
                 rawAnswer.replace(" ", "").replace("\n", "").replace("\r", "").uppercase()
             } else {

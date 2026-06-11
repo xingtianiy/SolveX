@@ -30,14 +30,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tianhuiu.solvex.ui.components.MathView
 import com.tianhuiu.solvex.utils.FileUtils
-import androidx.compose.ui.platform.LocalContext
 
 /**
- * 使用教程页面：提供分页化的超详细使用指南，优化换行、问答分离排版
+ * 使用教程页面。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,7 +121,8 @@ fun TutorialScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
-                lineHeight = 2.0f
+                lineHeight = 2.0f,
+                forceMarkdown = true
             )
         }
     }

@@ -4,6 +4,9 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -14,12 +17,9 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * SSE 流式客户端：基于 OkHttp SSE 实现，负责建立连接并处理事件流。
+ * SSE 流式客户端。
  */
 class SseStreamClient(
     private val client: OkHttpClient,
@@ -147,6 +147,8 @@ class SseStreamClient(
     }
 
     companion object {
+        private val errorJson = Json { ignoreUnknownKeys = true }
+
         /**
          * 解析 API 错误响应体，提取人类可读的错误描述。
          * 同时根据 HTTP 状态码和常见错误关键词映射为用户友好的中文提示。
@@ -154,8 +156,7 @@ class SseStreamClient(
         fun parseApiErrorMessage(code: Int, body: String): String {
             // 尝试从 JSON 中提取 error.message
             val apiMessage = try {
-                val json = Json { ignoreUnknownKeys = true }
-                val obj = json.parseToJsonElement(body).jsonObject
+                val obj = errorJson.parseToJsonElement(body).jsonObject
                 obj["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
                     ?: obj["message"]?.jsonPrimitive?.content
             } catch (_: Exception) {

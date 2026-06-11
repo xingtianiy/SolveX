@@ -15,7 +15,7 @@ import kotlinx.serialization.json.Json
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 /**
- * 设置仓库：基于 Jetpack DataStore 持久化应用全局配置（模型、助手、权限等）。
+ * 设置仓库。
  */
 class SettingsRepository(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true }

@@ -63,7 +63,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 /**
- * 提供方编辑页面：用于创建或修改模型提供方的详细配置。
+ * 提供方编辑页面。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,7 +133,6 @@ fun ProviderEditScreen(
 
     val hasUnsavedChanges = remember(existingProvider, currentProviderState) {
         if (existingProvider == null) {
-            // 对于新添加的情况，如果任何字段不为空则视为有修改
             name.isNotBlank() || url.isNotBlank() || apiKey.isNotBlank() ||
                     defaultOcrModel.isNotBlank() || defaultTextModel.isNotBlank() || defaultVisionModel.isNotBlank()
         } else {
@@ -310,7 +309,6 @@ fun ProviderEditScreen(
 
                 TextButton(
                     onClick = {
-                        // 先确保本地状态是最新的，虽然 preview 会带入 provider 对象
                         showPreviewDialog = true
                     },
                     enabled = url.isNotBlank()

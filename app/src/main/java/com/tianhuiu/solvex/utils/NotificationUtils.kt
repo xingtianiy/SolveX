@@ -8,7 +8,6 @@ import android.content.Intent
 import android.os.Build
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
-import com.tianhuiu.solvex.MainActivity
 import com.tianhuiu.solvex.R
 
 /**
@@ -20,6 +19,28 @@ object NotificationUtils {
 
     const val ACTION_VIEW_HISTORY = "com.tianhuiu.solvex.VIEW_HISTORY"
     const val EXTRA_HISTORY_ID = "history_id"
+
+    // 预编译正则表达式
+    private val finalAnswerPatterns = listOf(
+        Regex("""###\s*【?最终答案】?\s*\n+(.*)""", setOf(RegexOption.DOT_MATCHES_ALL)),
+        Regex("""###\s*最终答案\s*\n+(.*)""", setOf(RegexOption.DOT_MATCHES_ALL)),
+        Regex("""最终答案[：:]\s*(.*)""", setOf(RegexOption.DOT_MATCHES_ALL))
+    )
+    private val latexEnvRegex =
+        Regex("""\\begin\{.*?\}.*?\\end\{.*?\}""", setOf(RegexOption.DOT_MATCHES_ALL))
+    private val displayMathRegex = Regex("""\$\$.*?\$\$""", setOf(RegexOption.DOT_MATCHES_ALL))
+    private val inlineMathRegex = Regex("""\$.*?\$""")
+    private val latexCmdRegex = Regex(
+        """\\(begin|end|left|right|vmatrix|matrix|frac|sqrt|cdot|times|div|pm|mp|le|ge|ne|approx|equiv|sum|prod|int|oint|partial|nabla|infty|alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)"""
+    )
+    private val mdHeadingRegex = Regex("""#+\s+""")
+    private val mdBoldRegex = Regex("""(\*\*|__)""")
+    private val mdItalicRegex = Regex("""(\*|_)""")
+    private val mdCodeRegex = Regex("""`""")
+    private val mdQuoteRegex = Regex(""">\s+""")
+    private val mdLinkRegex = Regex("""\[(.*?)\]\((.*?)\)""")
+    private val whitespaceRegex = Regex("""[ \t]+""")
+    private val questionTypeRegex = Regex("""^【(.+?)】""")
 
     /**
      * 将完整解析结果拆分为“解析过程”和“最终答案”。
@@ -42,14 +63,8 @@ object NotificationUtils {
      * 移除所有 Markdown 符号以获得纯文本展示。
      */
     fun extractFinalAnswer(fullAnswer: String): String {
-        val patterns = listOf(
-            Regex("""###\s*【?最终答案】?\s*\n+(.*)""", setOf(RegexOption.DOT_MATCHES_ALL)),
-            Regex("""###\s*最终答案\s*\n+(.*)""", setOf(RegexOption.DOT_MATCHES_ALL)),
-            Regex("""最终答案[：:]\s*(.*)""", setOf(RegexOption.DOT_MATCHES_ALL))
-        )
-
         var rawExtracted = fullAnswer
-        for (pattern in patterns) {
+        for (pattern in finalAnswerPatterns) {
             val match = pattern.find(fullAnswer)
             if (match != null) {
                 val extracted = match.groupValues[1].trim()
@@ -62,26 +77,20 @@ object NotificationUtils {
 
         // 强力清除 LaTeX 环境和符号
         val cleanText = rawExtracted
-            .replace(
-                Regex("""\\begin\{.*?\}.*?\\end\{.*?\}""", setOf(RegexOption.DOT_MATCHES_ALL)),
-                "[公式]"
-            ) // 移除复杂 LaTeX 环境
-            .replace(Regex("""\$\$.*?\$\$""", setOf(RegexOption.DOT_MATCHES_ALL)), "") // 移除独立行公式
-            .replace(Regex("""\$.*?\$"""), "") // 移除行内公式
-            .replace(
-                Regex("""\\(begin|end|left|right|vmatrix|matrix|frac|sqrt|cdot|times|div|pm|mp|le|ge|ne|approx|equiv|sum|prod|int|oint|partial|nabla|infty|alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)"""),
-                ""
-            ) // 移除常见 LaTeX 指令
+            .replace(latexEnvRegex, "[公式]")
+            .replace(displayMathRegex, "")
+            .replace(inlineMathRegex, "")
+            .replace(latexCmdRegex, "")
 
         // 移除 Markdown 标记
         return cleanText
-            .replace(Regex("""#+\s+"""), "") // 移除标题 #
-            .replace(Regex("""(\*\*|__)"""), "") // 移除加粗 **
-            .replace(Regex("""(\*|_)"""), "") // 移除斜体 *
-            .replace(Regex("""`"""), "") // 移除代码块 `
-            .replace(Regex(""">\s+"""), "") // 移除引用 >
-            .replace(Regex("""\[(.*?)\]\((.*?)\)"""), "$1") // 移除链接
-            .replace(Regex("""[ \t]+"""), " ") // 将多个空格或制表符替换为单个空格（保留换行）
+            .replace(mdHeadingRegex, "")
+            .replace(mdBoldRegex, "")
+            .replace(mdItalicRegex, "")
+            .replace(mdCodeRegex, "")
+            .replace(mdQuoteRegex, "")
+            .replace(mdLinkRegex, "$1")
+            .replace(whitespaceRegex, " ")
             .trim()
     }
 
@@ -122,8 +131,7 @@ object NotificationUtils {
             return "解析问题【$type】" to content
         }
 
-        val typeRegex = Regex("""^【(.+?)】""")
-        val match = typeRegex.find(extractedText)
+        val match = questionTypeRegex.find(extractedText)
 
         return if (match != null) {
             val type = match.groupValues[1]
@@ -142,9 +150,7 @@ object NotificationUtils {
     }
 
     /**
-     * 统一反馈接口：
-     * 1. 弹出简短的 Toast 给用户
-     * 2. 打印详细的 Log 供调试
+     * 统一反馈接口：Toast 提示 + Log 记录。
      */
     fun showFeedback(
         context: Context,

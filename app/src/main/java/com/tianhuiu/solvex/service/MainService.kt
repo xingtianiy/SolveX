@@ -28,6 +28,7 @@ import com.tianhuiu.solvex.data.models.HistoryItem
 import com.tianhuiu.solvex.data.models.ProcessingStatus
 import com.tianhuiu.solvex.data.models.ProjectMode
 import com.tianhuiu.solvex.floating.BallStatus
+import com.tianhuiu.solvex.floating.CropManager
 import com.tianhuiu.solvex.floating.DrawerManager
 import com.tianhuiu.solvex.floating.FloatingBallManager
 import com.tianhuiu.solvex.utils.AutomationTools
@@ -46,7 +47,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * 后台核心服务：管理生命周期、屏幕捕获策略、流水线执行。
+ * 后台核心服务。
  */
 class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -68,6 +69,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var floatingBallManager: FloatingBallManager? = null
     private var drawerManager: DrawerManager? = null
+    private var cropManager: CropManager? = null
     private var currentHistoryId: String? = null
     private var processingJob: Job? = null
     private var captureEngine: ScreenCaptureEngine? = null
@@ -98,6 +100,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
         val pipeline = container.processingPipeline
         drawerManager = DrawerManager(this, historyRepository)
+        cropManager = CropManager(this)
 
         floatingBallManager = FloatingBallManager(this).apply {
             onSingleClick = {
@@ -133,10 +136,27 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 VibrationUtils.vibrateSuccess(this@MainService)
                                 val config = repository.appConfigFlow.first()
 
+                                // 常规学习模式：弹出裁剪界面让用户选取重要区域
+                                var image: android.graphics.Bitmap = bitmap
+                                if (config.selectedMode == ProjectMode.STUDY_MODE) {
+                                    cropManager?.let { manager ->
+                                        val cropped = manager.crop(image)
+                                        if (cropped == null) {
+                                            // 用户取消了裁剪，恢复状态
+                                            updateStatus(BallStatus.IDLE)
+                                            return@launch
+                                        }
+                                        if (cropped !== image) {
+                                            image.recycle()
+                                        }
+                                        image = cropped
+                                    }
+                                }
+
                                 // 创建初始记录
                                 val models = pipeline.resolveModels(config)
                                 val initialResult =
-                                    pipeline.createBaseResult(models, bitmap, "正在获取题目...")
+                                    pipeline.createBaseResult(models, image, "正在获取题目...")
                                 val historyId = initialResult.id
                                 currentHistoryId = historyId
                                 val historyItem = HistoryItem(
@@ -180,7 +200,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                     fun scheduleUpdate() {
                                         if (pendingUpdateJob?.isActive == true) return
-                                        pendingUpdateJob = lifecycle.coroutineScope.launch {
+                                        pendingUpdateJob =
+                                            lifecycle.coroutineScope.launch(Dispatchers.IO) {
                                             delay(500)
                                             historyRepository.updateHistoryItem(historyId) { current ->
                                                 current.copy(
@@ -194,7 +215,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                     try {
                                         val result = pipeline.process(
                                             config = config,
-                                            bitmap = bitmap,
+                                            bitmap = image,
                                             onSummaryGenerated = { title, summary ->
                                                 lifecycle.coroutineScope.launch {
                                                     historyRepository.updateHistoryItem(historyId) { current ->
@@ -209,18 +230,21 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                                 if (currentQueryText.isEmpty()) currentQueryText =
                                                     ""
                                                 currentQueryText += delta
+                                                drawerManager?.appendLiveQuery(delta)
                                                 scheduleUpdate()
                                             },
                                             onDelta = { delta ->
                                                 if (currentResultText.isEmpty()) currentResultText =
                                                     ""
                                                 currentResultText += delta
+                                                drawerManager?.appendLiveResult(delta)
                                                 scheduleUpdate()
                                             }
                                         )
 
-                                        // 确保最后一次更新已同步
+                                        // 等待待处理更新
                                         pendingUpdateJob?.cancelAndJoin()
+                                        drawerManager?.clearLiveBuffer()
 
                                         if (result.status == ProcessingStatus.SUCCESS) {
                                             updateStatus(BallStatus.SUCCESS)
@@ -319,7 +343,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                             }
                                         }
                                     } finally {
-                                        bitmap.recycle()
+                                        image.recycle()
                                     }
                                 } catch (e: CancellationException) {
                                     cleanupScope.launch {
@@ -443,7 +467,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         captureEngine?.release()
         captureEngine = null
         floatingBallManager?.hide()
-        // 在生命周期范围销毁之前，将正在进行的历史记录标记为已取消
+        // 取消正在处理的历史记录
         currentHistoryId?.let { id ->
             cleanupScope.launch {
                 historyRepository.updateHistoryItem(id) { current ->
@@ -487,7 +511,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                 }
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     /**

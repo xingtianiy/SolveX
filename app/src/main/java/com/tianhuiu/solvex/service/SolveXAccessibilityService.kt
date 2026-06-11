@@ -6,6 +6,7 @@ import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
 /**
@@ -17,6 +18,11 @@ class SolveXAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: SolveXAccessibilityService? = null
             private set
+
+        /** 后台截屏线程 */
+        private val screenshotExecutor = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "SolveX-Screenshot").apply { priority = Thread.NORM_PRIORITY }
+        }
     }
 
     override fun onServiceConnected() {
@@ -51,7 +57,7 @@ class SolveXAccessibilityService : AccessibilityService() {
             try {
                 takeScreenshot(
                     android.view.Display.DEFAULT_DISPLAY,
-                    mainExecutor,
+                    screenshotExecutor,
                     object : TakeScreenshotCallback {
                         override fun onSuccess(screenshot: ScreenshotResult) {
                             try {
@@ -60,9 +66,9 @@ class SolveXAccessibilityService : AccessibilityService() {
                                     buffer,
                                     screenshot.colorSpace
                                 )
-                                // wrapHardwareBuffer creates immutable bitmap; copy before closing the buffer
+                                // copy 在后台线程执行
                                 val mutableBitmap = bitmap?.copy(Bitmap.Config.ARGB_8888, true)
-                                if (mutableBitmap != bitmap && bitmap != null) {
+                                if (mutableBitmap !== bitmap && bitmap != null) {
                                     bitmap.recycle()
                                 }
                                 buffer.close()

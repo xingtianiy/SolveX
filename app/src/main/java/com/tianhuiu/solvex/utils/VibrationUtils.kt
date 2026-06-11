@@ -10,18 +10,31 @@ import android.os.VibratorManager
  * 震动工具类：提供设备震动反馈功能。
  */
 object VibrationUtils {
+    @Volatile
+    private var cachedVibrator: Vibrator? = null
+
+    private fun getVibrator(context: Context): Vibrator {
+        return cachedVibrator ?: synchronized(this) {
+            cachedVibrator ?: run {
+                val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vibratorManager =
+                        context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                    vibratorManager.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                }
+                cachedVibrator = v
+                v
+            }
+        }
+    }
+
     /**
      * 触发指定时长的震动。
      */
     fun vibrate(context: Context, durationMillis: Long = 100) {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager =
-                context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vibratorManager.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
+        val vibrator = getVibrator(context.applicationContext)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(

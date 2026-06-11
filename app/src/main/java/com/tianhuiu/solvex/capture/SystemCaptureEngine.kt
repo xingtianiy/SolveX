@@ -15,10 +15,10 @@ import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import androidx.core.graphics.createBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * MediaProjection 截屏引擎：通过系统屏幕录制 API 获取屏幕内容。
@@ -119,12 +119,10 @@ class SystemCaptureEngine(
 
         val reader = imageReader ?: return@withContext null
 
-        var image = reader.acquireLatestImage()
-        var retry = 0
-        while (image == null && retry < 15) {
-            delay(10)
-            image = reader.acquireLatestImage()
-            retry++
+        val image = withTimeoutOrNull(200L) {
+            withContext(Dispatchers.IO) {
+                reader.acquireNextImage()
+            }
         }
 
         if (image == null) {

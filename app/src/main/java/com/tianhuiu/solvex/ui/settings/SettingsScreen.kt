@@ -1,6 +1,8 @@
 package com.tianhuiu.solvex.ui.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoMode
@@ -11,8 +13,11 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,17 +50,13 @@ fun SettingsScreen(navController: NavController) {
                 .padding(padding)
         ) {
             item {
-                SettingsGroup(title = "常规配置") {
+                SettingsGroup(title = "模式配置") {
                     SettingsItem(
                         label = "常规模式",
                         subLabel = "配置常规模式工作流",
                         icon = Icons.Default.Tune,
                         onClick = { navController.navigate("settings/study") }
                     )
-                }
-            }
-            item {
-                SettingsGroup(title = "自动配置") {
                     SettingsItem(
                         label = "自动模式",
                         subLabel = "配置自动化工作流",

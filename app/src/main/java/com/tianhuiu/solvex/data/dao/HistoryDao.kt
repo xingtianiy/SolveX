@@ -1,6 +1,10 @@
 package com.tianhuiu.solvex.data.dao
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
 import com.tianhuiu.solvex.data.models.HistoryItem
 import kotlinx.coroutines.flow.Flow
 
@@ -26,6 +30,9 @@ interface HistoryDao {
 
     @Query("SELECT * FROM history_items WHERE id = :id")
     suspend fun getHistoryItemById(id: String): HistoryItem?
+
+    @Query("SELECT * FROM history_items WHERE id = :id")
+    fun getHistoryItemByIdFlow(id: String): Flow<HistoryItem?>
 
     @Query("UPDATE history_items SET `status` = :status, `query` = :query, `result` = :result WHERE `status` = :processingStatus")
     suspend fun markProcessingAsCancelled(

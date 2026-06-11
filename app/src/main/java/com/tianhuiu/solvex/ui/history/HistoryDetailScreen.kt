@@ -4,7 +4,18 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,8 +27,26 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,12 +58,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.tianhuiu.solvex.ui.components.MathView
+import com.tianhuiu.solvex.ui.components.StatusBadge
 import com.tianhuiu.solvex.utils.AutomationTools
 import com.tianhuiu.solvex.utils.NotificationUtils
-import com.tianhuiu.solvex.ui.components.StatusBadge
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 /**
  * 历史解析详情屏幕。
@@ -46,8 +78,7 @@ fun HistoryDetailScreen(
     viewModel: HistoryViewModel,
     onBack: () -> Unit,
 ) {
-    val historyItems by viewModel.historyItems.collectAsState()
-    val item = historyItems.find { it.id == itemId }
+    val item by viewModel.getHistoryItemById(itemId).collectAsState(initial = null)
     var showFullscreenImage by remember { mutableStateOf(value = false) }
 
     Scaffold(
@@ -70,17 +101,14 @@ fun HistoryDetailScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                if (historyItems.isEmpty()) {
-                    CircularProgressIndicator()
-                } else {
-                    Text("未找到该记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                CircularProgressIndicator()
             }
         } else {
+            val currentItem = item!!
             key(itemId) {
                 val dateFormat =
                     remember { SimpleDateFormat("yyyy MM-dd HH:mm:ss", Locale.getDefault()) }
-                val timeStr = dateFormat.format(Date(item.timestamp))
+                val timeStr = dateFormat.format(Date(currentItem.timestamp))
 
                 Column(
                     modifier = Modifier
@@ -113,7 +141,7 @@ fun HistoryDetailScreen(
                                     value = timeStr,
                                     modifier = Modifier.weight(1f)
                                 )
-                                StatusBadge(item.status)
+                                StatusBadge(currentItem.status)
                             }
 
                             HorizontalDivider(
@@ -126,13 +154,13 @@ fun HistoryDetailScreen(
                                 MetadataRow(
                                     icon = Icons.Default.Face,
                                     label = "智能助手",
-                                    value = item.assistantName ?: "默认助手",
+                                    value = currentItem.assistantName ?: "默认助手",
                                     modifier = Modifier.weight(1f)
                                 )
                                 MetadataRow(
                                     icon = Icons.Default.AutoAwesome,
                                     label = "识别引擎",
-                                    value = item.engineName ?: "未知",
+                                    value = currentItem.engineName ?: "未知",
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -140,17 +168,23 @@ fun HistoryDetailScreen(
                             MetadataRow(
                                 icon = Icons.Default.Memory,
                                 label = "调用模型",
-                                value = item.modelName ?: "默认模型"
+                                value = currentItem.modelName ?: "默认模型"
                             )
                         }
                     }
 
                     // 截图展示
-                    item.imagePath?.let { path ->
+                    currentItem.imagePath?.let { path ->
                         val file = File(path)
                         if (file.exists()) {
-                            val bitmap = remember(path) { BitmapFactory.decodeFile(path) }
-                            if (bitmap != null) {
+                            val bitmap by produceState<android.graphics.Bitmap?>(null, path) {
+                                value = withContext(Dispatchers.IO) {
+                                    BitmapFactory.decodeFile(path)
+                                }
+                            }
+                            val loadedBitmap = bitmap
+                            if (loadedBitmap != null) {
+                                val imageBitmap = loadedBitmap.asImageBitmap()
                                 Column(
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -170,7 +204,7 @@ fun HistoryDetailScreen(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Image(
-                                            bitmap = bitmap.asImageBitmap(),
+                                            bitmap = imageBitmap,
                                             contentDescription = "截图",
                                             contentScale = ContentScale.FillWidth,
                                             modifier = Modifier
@@ -182,7 +216,7 @@ fun HistoryDetailScreen(
 
                                 if (showFullscreenImage) {
                                     FullscreenImageDialog(
-                                        bitmap = bitmap.asImageBitmap(),
+                                        bitmap = imageBitmap,
                                         onDismiss = { showFullscreenImage = false }
                                     )
                                 }
@@ -197,11 +231,13 @@ fun HistoryDetailScreen(
                     ) {
                         DetailSection(
                             title = "解析问题",
-                            content = NotificationUtils.renderStructuredQuestion(item.query),
-                            badgeText = AutomationTools.extractQuestionType(item.query)
+                            content = NotificationUtils.renderStructuredQuestion(currentItem.query),
+                            badgeText = AutomationTools.extractQuestionType(currentItem.query)
                         )
 
-                        val (process, finalAnswer) = NotificationUtils.splitAnalysisResult(item.result)
+                        val (process, finalAnswer) = NotificationUtils.splitAnalysisResult(
+                            currentItem.result
+                        )
 
                         if (process.isNotBlank()) {
                             val title = if (finalAnswer.isNotBlank()) "解析过程" else "解析结果"
@@ -221,7 +257,7 @@ fun HistoryDetailScreen(
 }
 
 /**
- * 元数据行：展示带有图标和标签的信息。
+ * 元数据行。
  */
 @Composable
 fun MetadataRow(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
@@ -253,7 +289,7 @@ fun MetadataRow(icon: ImageVector, label: String, value: String, modifier: Modif
 }
 
 /**
- * 详情内容区块：使用 MathView 支持 LaTeX 渲染。
+ * 详情内容区块。
  */
 @Composable
 fun DetailSection(

@@ -12,18 +12,19 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.*
-import okhttp3.OkHttpClient
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Anthropic Messages API 适配器。
- * 使用 POST /messages 流式端点，认证方式为 x-api-key。
- * SSE 事件通过 content_block_delta 提取文本增量，message_stop 标记结束。
  */
 class AnthropicAdapter(
     private val client: OkHttpClient,
@@ -44,7 +45,6 @@ class AnthropicAdapter(
                 add(buildJsonObject {
                     put("role", "user")
                     put("content", buildJsonArray {
-                        // 图片在前，文本在后（Anthropic 推荐顺序）
                         request.imagesBase64.forEach { img ->
                             add(buildJsonObject {
                                 put("type", "image")
@@ -117,7 +117,5 @@ class AnthropicAdapter(
 
     /** Anthropic 无公开模型列表接口，返回常用模型 */
     override suspend fun fetchModels(provider: ModelProvider): List<String> =
-        withContext(Dispatchers.IO) {
-            listOf("claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5")
-        }
+        listOf("claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5")
 }

@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.tianhuiu.solvex.BuildConfig
 import com.tianhuiu.solvex.data.SettingsRepository
 import com.tianhuiu.solvex.data.models.AppConfig
 import com.tianhuiu.solvex.data.models.AssistantConfig
@@ -27,7 +28,9 @@ import com.tianhuiu.solvex.data.models.VersionInfo
 import com.tianhuiu.solvex.network.UnifiedLLMClient
 import com.tianhuiu.solvex.service.MainService
 import com.tianhuiu.solvex.service.SolveXAccessibilityService
+import com.tianhuiu.solvex.utils.NotificationUtils
 import com.tianhuiu.solvex.utils.UpdateManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
@@ -35,7 +38,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
 import rikka.shizuku.Shizuku
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -54,17 +56,16 @@ data class ExportData(
  */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private val container = (application as com.tianhuiu.solvex.SolveXApplication).container
+    private val client = container.okHttpClient
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
     }
     private val llmClient = UnifiedLLMClient(client, json)
     private val updateManager = UpdateManager(application, client, json)
+
+    private var pendingSaveJob: kotlinx.coroutines.Job? = null
 
     var providers by mutableStateOf(emptyList<ModelProvider>())
         private set
@@ -145,7 +146,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             MainService.isRunning.collect { running ->
                 isServiceRunning = running
                 if (running) {
-                    // 如果服务正在运行且 activeMode 为空（冷启动），尝试从 repository 恢复
                     if (activeMode == null) {
                         repository.appConfigFlow.first().let { activeMode = it.selectedMode }
                     }
@@ -195,14 +195,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (manual) isCheckingUpdate = false
                     repository.saveLastUpdateCheck(System.currentTimeMillis())
 
-                    // 核心逻辑：比较 versionCode
-                    if (info.versionCode > com.tianhuiu.solvex.BuildConfig.VERSION_CODE) {
+                    // 比较 versionCode
+                    if (info.versionCode > BuildConfig.VERSION_CODE) {
                         updateInfo = info
                     } else if (manual) {
-                        // 如果是手动检测且没有新版本，给予明确反馈
-                        com.tianhuiu.solvex.utils.NotificationUtils.showToast(
+                        NotificationUtils.showToast(
                             getApplication(),
-                            "当前已是最新版本 (v${com.tianhuiu.solvex.BuildConfig.VERSION_NAME})"
+                            "当前已是最新版本"
                         )
                     }
                 }
@@ -210,7 +209,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (manual) {
                         isCheckingUpdate = false
                         val message = error.message ?: "未知错误"
-                        com.tianhuiu.solvex.utils.NotificationUtils.showFeedback(
+                        NotificationUtils.showFeedback(
                             getApplication(),
                             userMessage = "检查更新失败",
                             detailedLog = "Update check failed: $message"
@@ -242,7 +241,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun save() {
-        viewModelScope.launch {
+        pendingSaveJob?.cancel()
+        pendingSaveJob = viewModelScope.launch {
+            delay(300)
             repository.saveAppConfig(
                 AppConfig(
                     providers,
@@ -370,7 +371,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             save()
         } catch (e: Exception) {
-            com.tianhuiu.solvex.utils.NotificationUtils.showFeedback(
+            NotificationUtils.showFeedback(
                 getApplication(),
                 userMessage = "导入失败",
                 detailedLog = "Config import failed",
@@ -389,7 +390,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         importedList.forEach { imported ->
             val index = newList.indexOfFirst { nameSelector(it) == nameSelector(imported) }
             if (index != -1) {
-                // 如果已存在同名项，则使用合并逻辑（通常是保留原 ID 进行更新）
                 newList[index] = merger(newList[index], imported)
             } else {
                 newList.add(imported)
@@ -398,24 +398,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return newList
     }
 
-    fun fetchAvailableModels(providerId: String) {
-        viewModelScope.launch {
-            isFetchingModels = true
-            try {
-                fetchModelsDirect(providerId)
-            } finally {
-                isFetchingModels = false
-            }
-        }
-    }
-
     /** 连通性测试状态 */
     var connectivityTestStates by mutableStateOf<Map<String, ConnectivityTestState>>(emptyMap())
         private set
 
     /**
-     * 测试提供商连通性：通过拉取模型列表验证 API 是否可达。
-     * 返回 ConnectivityTestState 直接表示结果。
+     * 测试提供商连通性。
      */
     suspend fun testConnectivity(provider: ModelProvider): ConnectivityTestState {
         connectivityTestStates =
@@ -436,13 +424,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 直接传入 ModelProvider 获取模型列表，不依赖已保存的提供商列表。
-     * 适用于编辑/新建提供方时在保存前测试连接获取模型。
+     * 获取模型列表（绕过已保存状态）。
      */
     suspend fun fetchModelsForProvider(provider: ModelProvider): List<String> {
         return try {
             val models = llmClient.fetchModels(provider)
-            // 如果该提供商已保存，同步更新模型列表
             if (models.isNotEmpty() && providers.any { it.id == provider.id }) {
                 updateProvider(provider.copy(availableModels = models))
             }

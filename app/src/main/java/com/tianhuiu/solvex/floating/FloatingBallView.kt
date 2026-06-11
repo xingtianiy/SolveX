@@ -1,9 +1,21 @@
 package com.tianhuiu.solvex.floating
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,7 +26,9 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 /**
  * 悬浮球视图：负责渲染不同状态、答案内容。支持超长文本自动横向滚动。
@@ -60,16 +75,19 @@ fun FloatingBallView(
         label = "alpha"
     )
 
-    val rotationTransition = rememberInfiniteTransition(label = "rotation")
-    val rotation by rotationTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
+    val rotation: Float = if (status == BallStatus.RUNNING) {
+        val rotationTransition = rememberInfiniteTransition(label = "rotation")
+        val animatedFloat by rotationTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation"
+        )
+        animatedFloat
+    } else 0f
 
     val backgroundColor = when (status) {
         BallStatus.IDLE -> Color(0xFF2196F3)
@@ -124,9 +142,10 @@ fun FloatingBallView(
 
                         // 自动滚动逻辑：针对长文本开启循环滚动
                         if (ballText.length > 2) {
-                            LaunchedEffect(ballText) {
-                                while (true) {
-                                    delay(1500) // 停顿后开始
+                            LaunchedEffect(ballText, displayMode) {
+                                if (displayMode != BallDisplayMode.FULL) return@LaunchedEffect
+                                while (isActive) {
+                                    delay(1500)
                                     scrollState.animateScrollTo(
                                         scrollState.maxValue,
                                         animationSpec = tween(

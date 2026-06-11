@@ -7,14 +7,22 @@ import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.*
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.tianhuiu.solvex.data.HistoryRepository
@@ -26,7 +34,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * 抽屉管理器：负责抽屉 WindowManager 挂载与状态更新。
+ * 抽屉管理器。
  */
 class DrawerManager(
     private val context: Context,
@@ -38,6 +46,10 @@ class DrawerManager(
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var observeJob: Job? = null
     private val currentItem = mutableStateOf<HistoryItem?>(null)
+
+    // 实时 UI 缓冲
+    private var liveQuery = ""
+    private var liveResult = ""
 
     private val layoutParams = WindowManager.LayoutParams().apply {
         type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -63,6 +75,7 @@ class DrawerManager(
         widthPercent: Float,
         showMetadata: Boolean = false
     ) {
+
         if (composeView != null) {
             updateContent(historyId)
             return
@@ -78,6 +91,12 @@ class DrawerManager(
             setContent {
                 MaterialTheme {
                     val item by currentItem
+                    val displayItem = item?.let {
+                        it.copy(
+                            query = liveQuery.ifEmpty { it.query },
+                            result = liveResult.ifEmpty { it.result }
+                        )
+                    }
                     Box(modifier = Modifier.fillMaxSize()) {
                         // 背景遮罩，点击关闭
                         Box(
@@ -99,7 +118,7 @@ class DrawerManager(
                                 .clickable(enabled = false) {} // 拦截点击
                         ) {
                             DrawerView(
-                                item = item,
+                                item = displayItem,
                                 showMetadata = showMetadata,
                                 onClose = { hide() }
                             )
@@ -120,6 +139,32 @@ class DrawerManager(
                 currentItem.value = items.find { it.id == historyId }
             }
         }
+    }
+
+    /**
+     * 实时追加提取文本。
+     */
+    fun appendLiveQuery(delta: String) {
+        liveQuery += delta
+        currentItem.value = currentItem.value?.copy(query = liveQuery)
+    }
+
+    /**
+     * 实时追加解析结果。
+     */
+    fun appendLiveResult(delta: String) {
+        liveResult += delta
+        currentItem.value = currentItem.value?.copy(result = liveResult)
+    }
+
+    /**
+     * 清除实时缓冲区。
+     */
+    fun clearLiveBuffer() {
+        liveQuery = ""
+        liveResult = ""
+        // 触发一次 recomposition 用 DB 数据刷新
+        currentItem.value = currentItem.value
     }
 
     /**

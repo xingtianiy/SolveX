@@ -13,12 +13,7 @@ import rikka.shizuku.Shizuku.UserServiceArgs
 import kotlin.coroutines.resume
 
 /**
- * Shizuku 用户服务客户端：管理 binder 连接的生命周期。
- *
- * 实现"持久化连接"模式：
- * - 单例缓存 binder 引用，重复调用无需重新绑定
- * - 带超时的按需连接
- * - 5 秒超时保护，防止永久挂起
+ * Shizuku 用户服务客户端。
  */
 object ShizukuUserServiceClient {
     private const val TAG = "ShizukuClient"

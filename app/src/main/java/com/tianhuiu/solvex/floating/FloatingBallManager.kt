@@ -6,19 +6,25 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.view.*
-import androidx.compose.runtime.*
+import android.view.GestureDetector
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.*
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlin.math.abs
 
 /**
- * 悬浮球管理类：负责悬浮窗的生命周期、状态切换及交互逻辑。
- */
-/**
- * 悬浮球管理器：负责 WindowManager 挂载、触摸事件分发及状态同步。
+ * 悬浮球管理器。
  */
 class FloatingBallManager(private val context: Context) {
 
@@ -54,14 +60,12 @@ class FloatingBallManager(private val context: Context) {
         set(value) {
             _enableAutoHide.value = value
             if (!value) {
-                // 如果关闭了自动隐藏，立即取消计时器并恢复显示
                 handler.removeCallbacks(hideRunnable)
                 if (displayMode == BallDisplayMode.HIDDEN_STRIP) {
                     displayMode = BallDisplayMode.FULL
                     snapToEdge()
                 }
             } else {
-                // 如果开启了自动隐藏，开始计时
                 resetHideTimer()
             }
         }
@@ -84,11 +88,9 @@ class FloatingBallManager(private val context: Context) {
      * 显示悬浮球。
      */
     fun show() {
-        // 如果 View 存在且已 attached，无需操作
         val existing = composeView
         if ((existing != null) && (existing.parent != null)) return
 
-        // 如果 View 存在但已 detached（异常恢复），重新 attach
         if (existing != null) {
             windowManager.addView(existing, layoutParams)
             resetHideTimer()
@@ -135,7 +137,7 @@ class FloatingBallManager(private val context: Context) {
     }
 
     /**
-     * 临时隐藏（不清除 composeView 状态），用于截图。
+     * 截屏前临时隐藏。
      */
     fun tempHide() {
         handler.removeCallbacks(hideRunnable)
@@ -169,7 +171,7 @@ class FloatingBallManager(private val context: Context) {
     }
 
     /**
-     * 更新悬浮球状态。所有状态均在无操作 5 秒后允许自动隐藏。
+     * 更新悬浮球状态。
      */
     fun updateStatus(newStatus: BallStatus) {
         status = newStatus
@@ -190,7 +192,7 @@ class FloatingBallManager(private val context: Context) {
     }
 
     /**
-     * 在悬浮球上显示文字，并强制恢复为全显模式。
+     * 在悬浮球上显示文字。
      */
     fun showText(text: String) {
         ballText = text
@@ -200,7 +202,7 @@ class FloatingBallManager(private val context: Context) {
     }
 
     /**
-     * 重置隐藏计时器：5 秒无操作后进入侧边隐藏模式。
+     * 重置自动隐藏计时器。
      */
     private fun resetHideTimer() {
         handler.removeCallbacks(hideRunnable)
@@ -210,7 +212,7 @@ class FloatingBallManager(private val context: Context) {
     }
 
     /**
-     * 获取当前悬浮球的视觉宽度（像素）。
+     * 获取悬浮球视觉宽度（像素）。
      */
     private fun getCurrentBallWidthPx(): Int {
         val density = context.resources.displayMetrics.density
@@ -240,19 +242,18 @@ class FloatingBallManager(private val context: Context) {
         private var initialTouchX = 0f
         private var initialTouchY = 0f
         private var isMoving = false
+        private var lastLayoutUpdateTime = 0L
 
         private val gestureDetector = GestureDetector(
             context,
             object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                     if (displayMode == BallDisplayMode.HIDDEN_STRIP) {
-                        // 隐藏状态下点击只唤醒显示
                         displayMode = BallDisplayMode.FULL
                         snapToEdge()
                         resetHideTimer()
                         return true
                     }
-                    // 仅在全显状态下触发点击功能
                     onSingleClick?.invoke()
                     resetHideTimer()
                     return true
@@ -268,7 +269,6 @@ class FloatingBallManager(private val context: Context) {
 
                 override fun onLongPress(e: MotionEvent) {
                     if (displayMode == BallDisplayMode.HIDDEN_STRIP) {
-                        // 隐藏状态下长按也唤醒显示
                         displayMode = BallDisplayMode.FULL
                         snapToEdge()
                         resetHideTimer()
@@ -307,9 +307,13 @@ class FloatingBallManager(private val context: Context) {
                         val ballWidth = getCurrentBallWidthPx()
                         isAtLeftEdge = (layoutParams.x + (ballWidth / 2)) < (screenWidth / 2)
 
-                        val view = composeView
-                        if (view != null && view.parent != null) {
-                            windowManager.updateViewLayout(view, layoutParams)
+                        val now = System.currentTimeMillis()
+                        if (now - lastLayoutUpdateTime >= 16) {
+                            lastLayoutUpdateTime = now
+                            val view = composeView
+                            if (view != null && view.parent != null) {
+                                windowManager.updateViewLayout(view, layoutParams)
+                            }
                         }
                         handler.removeCallbacks(hideRunnable)
                     }

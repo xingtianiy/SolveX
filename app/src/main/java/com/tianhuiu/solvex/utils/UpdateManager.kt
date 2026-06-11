@@ -131,7 +131,7 @@ class UpdateManager(
                 val body = response.body ?: throw Exception("响应体为空")
                 val totalBytes = body.contentLength()
 
-                // 检查内容类型，防止下载到 HTML 报错页
+                // 验证内容类型
                 val contentType = response.header("Content-Type") ?: ""
                 if (contentType.contains("text/html")) {
                     emit(DownloadStatus.Error("下载链接失效"))
@@ -146,7 +146,7 @@ class UpdateManager(
 
                 body.byteStream().use { input ->
                     FileOutputStream(destinationFile).use { output ->
-                        val buffer = ByteArray(8 * 1024)
+                        val buffer = ByteArray(64 * 1024)
                         var bytesRead: Int
                         var totalRead: Long = 0
                         var lastProgress = -1
@@ -165,7 +165,7 @@ class UpdateManager(
                     }
                 }
 
-                // 校验：确保文件大小与 Content-Length 一致
+                // 校验文件完整性
                 if (totalBytes > 0 && destinationFile.length() < totalBytes) {
                     emit(DownloadStatus.Error("文件下载不完整"))
                 } else {
