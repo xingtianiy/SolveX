@@ -22,8 +22,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
@@ -157,18 +159,17 @@ fun ModelSettingsScreen(
                                                 val result = viewModel.testConnectivity(provider)
                                                 when (result) {
                                                     is ConnectivityTestState.Success ->
-                                                        com.tianhuiu.solvex.utils.SystemUtils.showFeedback(
-                                                            context,
-                                                            userMessage = "连接成功",
-                                                            detailedLog = "${provider.name}: 连通成功 (${result.modelCount} 个模型)",
-                                                            priority = android.util.Log.INFO
+                                                        viewModel.showFeedbackDialog(
+                                                            title = "连接成功",
+                                                            message = "${provider.name}: 连通成功 (${result.modelCount} 个模型)",
+                                                            icon = Icons.Default.CheckCircle
                                                         )
 
                                                     is ConnectivityTestState.Failure ->
-                                                        com.tianhuiu.solvex.utils.SystemUtils.showFeedback(
-                                                            context,
-                                                            userMessage = "连接失败",
-                                                            detailedLog = "${provider.name}: ${result.message}"
+                                                        viewModel.showFeedbackDialog(
+                                                            title = "连接失败",
+                                                            message = "${provider.name}: ${result.message}",
+                                                            icon = Icons.Default.Error
                                                         )
 
                                                     else -> {}

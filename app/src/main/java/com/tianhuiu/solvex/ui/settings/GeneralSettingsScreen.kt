@@ -33,6 +33,7 @@ import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
+import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +42,7 @@ fun GeneralSettingsScreen(
     onBack: () -> Unit,
 ) {
     var pendingMode by remember { mutableStateOf<String?>(null) }
+    var showAccessibilityConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -92,7 +94,7 @@ fun GeneralSettingsScreen(
                     )
                     SettingsItem(
                         label = "无障碍截图",
-                        subLabel = "通过无障碍服务截取屏幕，一次授权后续静默截图",
+                        subLabel = "利用无障碍服务截取屏幕，一次授权后续静默截图",
                         icon = Icons.Default.AccessibilityNew,
                         trailing = {
                             RadioButton(
@@ -106,6 +108,9 @@ fun GeneralSettingsScreen(
                                                 captureMode = CaptureMode.ACCESSIBILITY
                                             )
                                         )
+                                        if (!viewModel.isAccessibilityEnabled) {
+                                            showAccessibilityConfirm = true
+                                        }
                                     }
                                 }
                             )
@@ -115,12 +120,15 @@ fun GeneralSettingsScreen(
                                 pendingMode = CaptureMode.ACCESSIBILITY
                             } else {
                                 viewModel.updatePermissions(viewModel.permissions.copy(captureMode = CaptureMode.ACCESSIBILITY))
+                                if (!viewModel.isAccessibilityEnabled) {
+                                    showAccessibilityConfirm = true
+                                }
                             }
                         }
                     )
                     SettingsItem(
                         label = "Shizuku ADB",
-                        subLabel = "通过 Shizuku 授权后调用 adb 截屏，一次授权后续静默截图",
+                        subLabel = "通过 Shizuku 授权后调用 ADB 截图。适合进阶用户使用。",
                         icon = Icons.Default.Terminal,
                         trailing = {
                             RadioButton(
@@ -134,6 +142,9 @@ fun GeneralSettingsScreen(
                                                 captureMode = CaptureMode.SHIZUKU
                                             )
                                         )
+                                        if (!viewModel.isShizukuPermissionGranted) {
+                                            viewModel.requestShizukuPermission()
+                                        }
                                     }
                                 }
                             )
@@ -143,6 +154,70 @@ fun GeneralSettingsScreen(
                                 pendingMode = CaptureMode.SHIZUKU
                             } else {
                                 viewModel.updatePermissions(viewModel.permissions.copy(captureMode = CaptureMode.SHIZUKU))
+                                if (!viewModel.isShizukuPermissionGranted) {
+                                    viewModel.requestShizukuPermission()
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(title = "隐私保护") {
+                    SettingsItem(
+                        label = "防截屏录屏",
+                        subLabel = "开启后应用的内容将无法被系统或其他应用截取。这是系统级底层保护。",
+                        icon = Icons.Default.Visibility,
+                        trailing = {
+                            Switch(
+                                checked = viewModel.permissions.enableScreenProtection,
+                                onCheckedChange = {
+                                    viewModel.updatePermissions(
+                                        viewModel.permissions.copy(
+                                            enableScreenProtection = it
+                                        )
+                                    )
+                                }
+                            )
+                        },
+                        onClick = {
+                            viewModel.updatePermissions(
+                                viewModel.permissions.copy(
+                                    enableScreenProtection = !viewModel.permissions.enableScreenProtection
+                                )
+                            )
+                        }
+                    )
+                    SettingsItem(
+                        label = "隐匿模式",
+                        subLabel = if (viewModel.isShizukuPermissionGranted) {
+                            "监测到受保护应用时自动同步开启自身隐私保护，并从多任务列表中隐藏。"
+                        } else {
+                            "隐匿模式使用需要激活 Shizuku 后使用。"
+                        },
+                        icon = Icons.Default.Warning,
+                        enabled = viewModel.isShizukuPermissionGranted,
+                        trailing = {
+                            Switch(
+                                checked = viewModel.permissions.enableStealthMode && viewModel.isShizukuPermissionGranted,
+                                onCheckedChange = {
+                                    viewModel.updatePermissions(
+                                        viewModel.permissions.copy(
+                                            enableStealthMode = it
+                                        )
+                                    )
+                                },
+                                enabled = viewModel.isShizukuPermissionGranted
+                            )
+                        },
+                        onClick = {
+                            if (viewModel.isShizukuPermissionGranted) {
+                                viewModel.updatePermissions(
+                                    viewModel.permissions.copy(
+                                        enableStealthMode = !viewModel.permissions.enableStealthMode
+                                    )
+                                )
                             }
                         }
                     )
@@ -212,12 +287,33 @@ fun GeneralSettingsScreen(
         }
     }
 
+    if (showAccessibilityConfirm) {
+        SolveXConfirmDialog(
+            onDismissRequest = { showAccessibilityConfirm = false },
+            onConfirm = {
+                showAccessibilityConfirm = false
+                viewModel.requestAccessibilityPermission()
+            },
+            title = "授权无障碍服务",
+            message = "无障碍截图模式需要启用“SolveX 截屏助手”服务。点击确认将前往系统设置页，请在“已安装的服务”中找到并开启。",
+            confirmText = "前往设置",
+            dismissText = "取消",
+            icon = Icons.Default.AccessibilityNew
+        )
+    }
+
     if (pendingMode != null) {
-        com.tianhuiu.solvex.ui.components.SolveXConfirmDialog(
+        SolveXConfirmDialog(
             onDismissRequest = { pendingMode = null },
             onConfirm = {
                 viewModel.stopService()
                 viewModel.updatePermissions(viewModel.permissions.copy(captureMode = pendingMode!!))
+                if (pendingMode == CaptureMode.SHIZUKU && !viewModel.isShizukuPermissionGranted) {
+                    viewModel.requestShizukuPermission()
+                }
+                if (pendingMode == CaptureMode.ACCESSIBILITY && !viewModel.isAccessibilityEnabled) {
+                    showAccessibilityConfirm = true
+                }
                 pendingMode = null
             },
             title = "需要停止服务",

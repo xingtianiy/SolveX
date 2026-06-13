@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -99,6 +100,13 @@ fun FloatingBallView(
         BallStatus.RUNNING -> Color(0xFF673AB7)
         BallStatus.SUCCESS -> Color(0xFF4CAF50)
         BallStatus.ERROR -> Color(0xFFF44336)
+        BallStatus.PROTECTED -> Color(0xFFFFA726)
+    }
+
+    val finalAlpha = if (status == BallStatus.PROTECTED) {
+        if (displayMode == BallDisplayMode.FULL) 0.6f else 0.2f
+    } else {
+        if (displayMode == BallDisplayMode.FULL) 1f else 0.4f
     }
 
     Box(
@@ -115,7 +123,7 @@ fun FloatingBallView(
                         bottomEnd = if (isAtLeftEdge) 8.dp else 0.dp
                     )
             )
-            .background(backgroundColor.copy(alpha = alpha))
+            .background(backgroundColor.copy(alpha = finalAlpha))
             .padding(if (displayMode == BallDisplayMode.FULL) 4.dp else 0.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -127,6 +135,15 @@ fun FloatingBallView(
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                BallStatus.PROTECTED -> {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = "已开启隐匿保护",
+                        tint = Color.White,
+                        modifier = Modifier.fillMaxSize().padding(2.dp)
                     )
                 }
 

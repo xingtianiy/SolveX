@@ -24,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.UpdateDialog
 import com.tianhuiu.solvex.ui.history.HistoryDetailScreen
 import com.tianhuiu.solvex.ui.history.HistoryScreen
@@ -72,6 +73,26 @@ fun SolveXApp(viewModel: MainViewModel) {
                 downloadStatus = viewModel.downloadStatus,
                 onDismiss = { viewModel.dismissUpdateDialog() },
                 onUpdate = { viewModel.startUpdate() }
+            )
+        }
+
+        // 全局通用弹窗
+        viewModel.globalDialogState?.let { data ->
+            SolveXConfirmDialog(
+                onDismissRequest = {
+                    data.onDismiss?.invoke()
+                    viewModel.dismissGlobalDialog()
+                },
+                onConfirm = {
+                    data.onConfirm()
+                    viewModel.dismissGlobalDialog()
+                },
+                title = data.title,
+                message = data.message,
+                confirmText = data.confirmText,
+                dismissText = data.dismissText ?: "取消",
+                isDestructive = data.isDestructive,
+                icon = data.icon
             )
         }
 
