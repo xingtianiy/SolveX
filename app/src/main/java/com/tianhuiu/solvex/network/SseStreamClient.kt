@@ -126,7 +126,7 @@ class SseStreamClient(
                             }
                             parseApiErrorMessage(response.code, bodySnippet)
                         } else if (t != null) {
-                            "网络异常: ${t.message}"
+                            "网络异常: ${translateNetworkException(t)}"
                         } else {
                             "未知网络错误"
                         }
@@ -148,6 +148,41 @@ class SseStreamClient(
 
     companion object {
         private val errorJson = Json { ignoreUnknownKeys = true }
+
+        /**
+         * 将网络层异常消息翻译为中文。
+         */
+        fun translateNetworkException(t: Throwable): String {
+            val msg = t.message ?: ""
+            return when {
+                msg.contains("Connection closed", ignoreCase = true) ||
+                msg.contains("Connection reset", ignoreCase = true) ||
+                msg.contains("Software caused connection abort", ignoreCase = true) ||
+                msg.contains("broken pipe", ignoreCase = true) ||
+                msg.contains("Socket closed", ignoreCase = true) ||
+                msg.contains("unexpected end of stream", ignoreCase = true) ->
+                    "网络连接中断，请检查网络后重试"
+                msg.contains("timeout", ignoreCase = true) ->
+                    "网络连接超时，请检查网络后重试"
+                msg.contains("Unable to resolve host", ignoreCase = true) ||
+                msg.contains("UnknownHost", ignoreCase = true) ||
+                msg.contains("No address associated", ignoreCase = true) ->
+                    "无法连接服务器，请检查网络连接"
+                msg.contains("Connection refused", ignoreCase = true) ||
+                msg.contains("Failed to connect", ignoreCase = true) ->
+                    "服务器拒绝连接，请稍后重试"
+                msg.contains("Network is unreachable", ignoreCase = true) ||
+                msg.contains("No route to host", ignoreCase = true) ->
+                    "网络不可达，请检查网络连接"
+                msg.contains("SSL", ignoreCase = true) ||
+                msg.contains("Certificate", ignoreCase = true) ->
+                    "安全连接失败，请检查网络环境"
+                msg.contains("Canceled", ignoreCase = true) ||
+                msg.contains("cancelled", ignoreCase = true) ->
+                    "请求已取消"
+                else -> msg.ifBlank { "未知错误" }
+            }
+        }
 
         /**
          * 解析 API 错误响应体，提取人类可读的错误描述。

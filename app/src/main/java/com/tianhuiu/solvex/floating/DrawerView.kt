@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,16 +31,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.tianhuiu.solvex.data.models.AnalysisStatus
 import com.tianhuiu.solvex.data.models.HistoryItem
+import com.tianhuiu.solvex.render.MarkdownParser
+import com.tianhuiu.solvex.ui.components.LoadingOverlay
 import com.tianhuiu.solvex.ui.components.StatusBadge
 import com.tianhuiu.solvex.ui.history.DetailSection
-import com.tianhuiu.solvex.ui.history.FinalAnswerSection
 import com.tianhuiu.solvex.ui.history.MetadataRow
 import com.tianhuiu.solvex.utils.AutomationTools
+import com.tianhuiu.solvex.utils.DateTimeUtils
 import com.tianhuiu.solvex.utils.NotificationUtils
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * 侧边抽屉视图：显示解析详情。
@@ -76,11 +77,8 @@ fun DrawerView(
                 }
             }
 
-            if (item == null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (item != null) {
                 val scrollState = rememberScrollState()
 
                 LaunchedEffect(item.query, item.result, autoScroll) {
@@ -97,13 +95,7 @@ fun DrawerView(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (showMetadata) {
-                        val dateFormat = remember {
-                            SimpleDateFormat(
-                                "yyyy MM-dd HH:mm:ss",
-                                Locale.getDefault()
-                            )
-                        }
-                        val timeStr = dateFormat.format(Date(item.timestamp))
+                        val timeStr = DateTimeUtils.formatFull(item.timestamp)
 
                         Card(
                             modifier = Modifier
@@ -137,25 +129,75 @@ fun DrawerView(
                         }
                     }
 
-                    DetailSection(
-                        title = "解析问题",
-                        content = NotificationUtils.renderStructuredQuestion(item.query),
-                        badgeText = AutomationTools.extractQuestionType(item.query)
-                    )
-
-                    val (process, finalAnswer) = NotificationUtils.splitAnalysisResult(item.result)
-
-                    if (process.isNotBlank()) {
-                        DetailSection(title = "解析过程", content = process)
+                    val sections = remember(item.result) {
+                        MarkdownParser.parse(item.result)
                     }
 
-                    if (finalAnswer.isNotBlank()) {
-                        FinalAnswerSection(title = "最终答案", content = finalAnswer)
+                    val isQueryPlaceholder = item.query == "思考中..." || item.query.isBlank()
+                    val isResultPlaceholder =
+                        sections.all { it.title.isEmpty() && (it.content == "思考中..." || it.content.isBlank()) }
+
+                    // 1. 如果还在提取阶段（Query 还是占位符），显示大加载动画
+                    if (item.status == AnalysisStatus.PROCESSING && isQueryPlaceholder) {
+                        LoadingState("正在提取内容...")
+                    } else {
+                        // 2. 显示提取出的内容（只要不是占位符）
+                        if (!isQueryPlaceholder) {
+                            val isStructured = remember(item.query) {
+                                item.query.contains("{") && item.query.contains("}")
+                            }
+
+                            DetailSection(
+                                title = if (isStructured) "解析问题" else "提取内容",
+                                content = NotificationUtils.renderStructuredQuestion(item.query),
+                                badgeText = AutomationTools.extractQuestionType(item.query)
+                            )
+                        }
+
+                        // 3. 如果提取完了但在生成解答阶段（Result 还是占位符），显示小加载动画
+                        if (item.status == AnalysisStatus.PROCESSING && isResultPlaceholder) {
+                            LoadingState("AI 正在分析中...")
+                        } else if (item.status != AnalysisStatus.CANCELLED) {
+                            // 4. 显示解答内容（已取消任务不显示部分结果）
+                            sections.forEachIndexed { index, section ->
+                                DetailSection(
+                                    title = section.title,
+                                    content = section.content,
+                                    isPrimary = index == sections.lastIndex
+                                )
+                            }
+                        }
                     }
 
                     Spacer(Modifier.height(24.dp))
                 }
+                }
+                LoadingOverlay(
+                    isLoading = item == null,
+                    message = "加载解析数据中"
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun LoadingState(text: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        CircularProgressIndicator(
+            strokeWidth = 3.dp,
+            modifier = Modifier.size(32.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

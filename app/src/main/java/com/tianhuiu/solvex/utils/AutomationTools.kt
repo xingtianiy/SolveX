@@ -1,8 +1,5 @@
 package com.tianhuiu.solvex.utils
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import com.tianhuiu.solvex.data.models.AutomationAction
 import com.tianhuiu.solvex.data.models.ExtractedQuestion
 import kotlinx.serialization.json.Json
@@ -14,15 +11,6 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 object AutomationTools {
     private val json = Json { ignoreUnknownKeys = true }
-
-    /**
-     * 将文字复制到系统剪贴板。
-     */
-    fun copyToClipboard(context: Context, text: String) {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("SolveX Answer", text)
-        clipboard.setPrimaryClip(clip)
-    }
 
     /**
      * 解析模型返回的自动化 JSON 响应。

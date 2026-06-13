@@ -108,6 +108,13 @@ fun UpdateDialog(
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
+                                if (info.updateLevel == UpdateLevel.CRITICAL) {
+                                    InfoChip(
+                                        text = "重要更新",
+                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                        contentColor = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
 
@@ -141,13 +148,6 @@ fun UpdateDialog(
                 ) {
                     InfoChip(text = "发布日期: ${info.releaseDate}")
                     InfoChip(text = "文件大小: ${info.apkSize}")
-                    if (info.updateLevel == UpdateLevel.CRITICAL) {
-                        InfoChip(
-                            text = "重要更新",
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    }
                 }
 
                 Spacer(Modifier.height(20.dp))

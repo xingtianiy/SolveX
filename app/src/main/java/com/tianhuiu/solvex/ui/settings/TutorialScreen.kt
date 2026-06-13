@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,8 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.tianhuiu.solvex.ui.components.LoadingOverlay
 import com.tianhuiu.solvex.ui.components.MathView
 import com.tianhuiu.solvex.utils.FileUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 使用教程页面。
@@ -50,11 +54,15 @@ fun TutorialScreen(onBack: () -> Unit) {
     )
 
     var currentPage by remember { mutableIntStateOf(0) }
-    val tutorialContent = remember(currentPage) {
-        FileUtils.readAssetFile(context, tutorialFileNames[currentPage])
+    val tutorialContent by produceState(initialValue = "", currentPage) {
+        value = withContext(Dispatchers.IO) {
+            FileUtils.readAssetFile(context, tutorialFileNames[currentPage])
+        }
     }
+    val isLoading = tutorialContent.isEmpty()
 
-    Scaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("使用教程", fontWeight = FontWeight.Bold) },
@@ -111,19 +119,22 @@ fun TutorialScreen(onBack: () -> Unit) {
             }
         }
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+            if (!isLoading) {
             MathView(
                 text = tutorialContent,
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(padding)
                     .padding(16.dp),
                 lineHeight = 2.0f,
                 forceMarkdown = true
             )
         }
+    }
+
+        LoadingOverlay(
+            isLoading = isLoading,
+            message = "加载教程中"
+        )
     }
 }

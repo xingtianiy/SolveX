@@ -1,35 +1,54 @@
 package com.tianhuiu.solvex.ui.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewSidebar
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.ModelSelectorItem
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 
-/**
- * 常规模式设置页面：配置常规学习模式下的模型及 UI 显示偏好。
- */
+// 统一模式设置页面
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudyModeSettingsScreen(
+fun ModeSettingsScreen(
+    modeId: String,
     viewModel: MainViewModel,
     onBack: () -> Unit,
 ) {
-    val config = viewModel.studyConfig
+    val mode = ModeRegistry.get(modeId)
+    val config = viewModel.currentModeConfig
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("常规模式配置") },
+                title = { Text("${mode.displayName}配置") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -55,11 +74,8 @@ fun StudyModeSettingsScreen(
                         type = "ocr",
                         onFetchModels = { viewModel.fetchModelsDirect(it) },
                         onModelSelected = { pid, model ->
-                            viewModel.updateStudyConfig(
-                                config.copy(
-                                    ocrProviderId = pid,
-                                    ocrModel = model
-                                )
+                            viewModel.updateModeConfig(
+                                config.copy(ocrProviderId = pid, ocrModel = model)
                             )
                         },
                         defaultProviderId = viewModel.defaultProviderId
@@ -73,11 +89,8 @@ fun StudyModeSettingsScreen(
                         type = "text",
                         onFetchModels = { viewModel.fetchModelsDirect(it) },
                         onModelSelected = { pid, model ->
-                            viewModel.updateStudyConfig(
-                                config.copy(
-                                    textProviderId = pid,
-                                    textModel = model
-                                )
+                            viewModel.updateModeConfig(
+                                config.copy(textProviderId = pid, textModel = model)
                             )
                         },
                         defaultProviderId = viewModel.defaultProviderId
@@ -91,17 +104,15 @@ fun StudyModeSettingsScreen(
                         type = "vision",
                         onFetchModels = { viewModel.fetchModelsDirect(it) },
                         onModelSelected = { pid, model ->
-                            viewModel.updateStudyConfig(
-                                config.copy(
-                                    visionProviderId = pid,
-                                    visionModel = model
-                                )
+                            viewModel.updateModeConfig(
+                                config.copy(visionProviderId = pid, visionModel = model)
                             )
                         },
                         defaultProviderId = viewModel.defaultProviderId
                     )
                 }
             }
+
             item {
                 SettingsGroup(title = "性能设置") {
                     SettingsItem(
@@ -117,10 +128,8 @@ fun StudyModeSettingsScreen(
                                 onValueChange = {
                                     text = it
                                     it.toLongOrNull()?.let { seconds ->
-                                        viewModel.updateStudyConfig(
-                                            config.copy(
-                                                firstDeltaTimeoutSeconds = seconds
-                                            )
+                                        viewModel.updateModeConfig(
+                                            config.copy(firstDeltaTimeoutSeconds = seconds)
                                         )
                                     }
                                 },
@@ -131,6 +140,7 @@ fun StudyModeSettingsScreen(
                     )
                 }
             }
+
             item {
                 SettingsGroup(title = "通知与显示") {
                     val isNotificationEnabled = viewModel.isNotificationPermissionGranted
@@ -144,7 +154,7 @@ fun StudyModeSettingsScreen(
                             Switch(
                                 checked = config.allowNotification && isNotificationEnabled,
                                 onCheckedChange = {
-                                    viewModel.updateStudyConfig(config.copy(allowNotification = it))
+                                    viewModel.updateModeConfig(config.copy(allowNotification = it))
                                 },
                                 enabled = isNotificationEnabled
                             )
@@ -158,7 +168,7 @@ fun StudyModeSettingsScreen(
                             Switch(
                                 checked = config.autoOpenDrawer,
                                 onCheckedChange = {
-                                    viewModel.updateStudyConfig(config.copy(autoOpenDrawer = it))
+                                    viewModel.updateModeConfig(config.copy(autoOpenDrawer = it))
                                 }
                             )
                         }

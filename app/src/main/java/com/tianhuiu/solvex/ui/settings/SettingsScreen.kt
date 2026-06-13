@@ -5,14 +5,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoMode
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -22,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 
@@ -51,18 +50,14 @@ fun SettingsScreen(navController: NavController) {
         ) {
             item {
                 SettingsGroup(title = "模式配置") {
-                    SettingsItem(
-                        label = "常规模式",
-                        subLabel = "配置常规模式工作流",
-                        icon = Icons.Default.Tune,
-                        onClick = { navController.navigate("settings/study") }
-                    )
-                    SettingsItem(
-                        label = "自动模式",
-                        subLabel = "配置自动化工作流",
-                        icon = Icons.Default.AutoMode,
-                        onClick = { navController.navigate("settings/quick") }
-                    )
+                    ModeRegistry.all.forEach { mode ->
+                        SettingsItem(
+                            label = mode.displayName,
+                            subLabel = mode.description,
+                            icon = mode.icon,
+                            onClick = { navController.navigate("settings/mode/${mode.id}") }
+                        )
+                    }
                 }
             }
             item {

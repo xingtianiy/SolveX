@@ -66,7 +66,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.data.models.EngineType
-import com.tianhuiu.solvex.data.models.ProjectMode
+import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 
@@ -573,7 +573,7 @@ fun ActionSection(viewModel: MainViewModel) {
                                         if (isRunning) {
                                             viewModel.updateShowStopConfirmationDialog(true)
                                         } else {
-                                            viewModel.setMode(ProjectMode.STUDY_MODE)
+                                            viewModel.setMode("study")
                                             viewModel.startService()
                                         }
                                     }
@@ -581,7 +581,7 @@ fun ActionSection(viewModel: MainViewModel) {
                                 onLongClick = {
                                     safeAction {
                                         if (!isRunning) {
-                                            viewModel.setMode(ProjectMode.QUICK_MODE)
+                                            viewModel.setMode("quick")
                                             viewModel.startService()
                                         }
                                     }
@@ -625,7 +625,8 @@ fun ActionSection(viewModel: MainViewModel) {
         ) {
             val statusText = when {
                 isRunning -> {
-                    val modeName = viewModel.activeMode?.displayName ?: ""
+                    val modeName =
+                        viewModel.activeModeId?.let { ModeRegistry.get(it).displayName } ?: ""
                     "${modeName}正在运行中..."
                 }
 

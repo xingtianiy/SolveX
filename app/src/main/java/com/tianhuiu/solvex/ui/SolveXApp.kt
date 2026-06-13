@@ -32,12 +32,11 @@ import com.tianhuiu.solvex.ui.settings.AboutScreen
 import com.tianhuiu.solvex.ui.settings.AssistantEditScreen
 import com.tianhuiu.solvex.ui.settings.GeneralSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ImportExportSettingsScreen
+import com.tianhuiu.solvex.ui.settings.ModeSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ModelSettingsScreen
 import com.tianhuiu.solvex.ui.settings.PermissionSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ProviderEditScreen
-import com.tianhuiu.solvex.ui.settings.QuickModeSettingsScreen
 import com.tianhuiu.solvex.ui.settings.SettingsScreen
-import com.tianhuiu.solvex.ui.settings.StudyModeSettingsScreen
 import com.tianhuiu.solvex.ui.settings.TutorialScreen
 
 /**
@@ -145,14 +144,13 @@ fun SolveXApp(viewModel: MainViewModel) {
                         onBack = { navController.popBackStack() }
                     )
                 }
-                composable("settings/study") {
-                    StudyModeSettingsScreen(
-                        viewModel = viewModel,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-                composable("settings/quick") {
-                    QuickModeSettingsScreen(
+                composable(
+                    route = "settings/mode/{modeId}",
+                    arguments = listOf(navArgument("modeId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val modeId = backStackEntry.arguments?.getString("modeId") ?: ""
+                    ModeSettingsScreen(
+                        modeId = modeId,
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() }
                     )

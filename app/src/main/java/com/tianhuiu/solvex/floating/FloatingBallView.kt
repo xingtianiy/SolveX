@@ -43,6 +43,8 @@ import kotlinx.coroutines.isActive
 /**
  * 悬浮球视图：负责渲染不同状态、答案内容。支持超长文本自动横向滚动。
  */
+const val BALL_HIDDEN_RATIO = 0.35f
+
 /**
  * 悬浮球组件 UI 实现。
  */
@@ -51,11 +53,14 @@ fun FloatingBallView(
     status: BallStatus,
     displayMode: BallDisplayMode,
     isAtLeftEdge: Boolean,
-    ballText: String? = null
+    ballText: String? = null,
+    ballFullSizeDp: Float = 40f,
 ) {
-    // 基础尺寸：40dp (球体) / 14dp (侧边条)
-    val baseSize = if (displayMode == BallDisplayMode.FULL) 40.dp else 24.dp
-    val baseWidth = if (displayMode == BallDisplayMode.FULL) 40.dp else 14.dp
+    // 可配置尺寸
+    val baseSize =
+        if (displayMode == BallDisplayMode.FULL) ballFullSizeDp.dp else (ballFullSizeDp * 0.6f).dp
+    val baseWidth =
+        if (displayMode == BallDisplayMode.FULL) ballFullSizeDp.dp else (ballFullSizeDp * BALL_HIDDEN_RATIO).dp
 
     val targetHeight = if (displayMode == BallDisplayMode.FULL) baseSize else baseSize * 3
     val size by animateDpAsState(

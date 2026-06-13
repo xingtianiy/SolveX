@@ -26,14 +26,15 @@ import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.data.models.EngineType
 import com.tianhuiu.solvex.data.models.HistoryItem
 import com.tianhuiu.solvex.data.models.ProcessingStatus
-import com.tianhuiu.solvex.data.models.ProjectMode
+import com.tianhuiu.solvex.data.models.currentModeConfig
 import com.tianhuiu.solvex.floating.BallStatus
 import com.tianhuiu.solvex.floating.CropManager
 import com.tianhuiu.solvex.floating.DrawerManager
 import com.tianhuiu.solvex.floating.FloatingBallManager
-import com.tianhuiu.solvex.utils.AutomationTools
+import com.tianhuiu.solvex.mode.ModeRegistry
+import com.tianhuiu.solvex.network.SseStreamClient
 import com.tianhuiu.solvex.utils.NotificationUtils
-import com.tianhuiu.solvex.utils.VibrationUtils
+import com.tianhuiu.solvex.utils.SystemUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -134,12 +135,12 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                             }
 
                             if (bitmap != null) {
-                                VibrationUtils.vibrateSuccess(this@MainService)
+                                SystemUtils.vibrateSuccess(this@MainService)
                                 val config = repository.appConfigFlow.first()
 
                                 // 常规学习模式：弹出裁剪界面让用户选取重要区域
                                 var image: android.graphics.Bitmap = bitmap
-                                if (config.selectedMode == ProjectMode.STUDY_MODE) {
+                                if (ModeRegistry.get(config.selectedModeId).shouldCrop) {
                                     cropManager?.let { manager ->
                                         val cropped = manager.crop(image)
                                         if (cropped == null) {
@@ -162,10 +163,10 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 currentHistoryId = historyId
                                 val historyItem = HistoryItem(
                                     id = historyId,
-                                    query = "屏幕解析",
-                                    result = "正在处理...",
+                                    query = "思考中...",
+                                    result = "思考中...",
                                     imagePath = initialResult.screenshotPath,
-                                    mode = config.selectedMode.displayName,
+                                    mode = config.selectedModeId,
                                     assistantName = initialResult.assistantName,
                                     providerName = initialResult.modelSummary,
                                     modelName = initialResult.modelSummary,
@@ -176,12 +177,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                 try {
                                     // 检查是否需要自动打开抽屉
-                                    val autoOpen =
-                                        if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                            config.studyConfig.autoOpenDrawer
-                                        } else {
-                                            config.quickConfig.autoOpenDrawer
-                                        }
+                                    val autoOpen = config.currentModeConfig().autoOpenDrawer
 
                                     if (autoOpen) {
                                         lifecycle.coroutineScope.launch {
@@ -249,7 +245,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                         if (result.status == ProcessingStatus.SUCCESS) {
                                             updateStatus(BallStatus.SUCCESS)
-                                            VibrationUtils.vibrateSuccess(this@MainService)
+                                            SystemUtils.vibrateSuccess(this@MainService)
 
                                             // 执行自动化动作
                                             val action = result.automationAction ?: run {
@@ -270,7 +266,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                                     }
 
                                                     "set_clipboard" -> {
-                                                        AutomationTools.copyToClipboard(
+                                                        SystemUtils.copyToClipboard(
                                                             this@MainService,
                                                             act.text
                                                         )
@@ -284,11 +280,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                                 historyRepository.historyItemsFlow.first()
                                                     .find { it.id == historyId }
                                             val allowNotification =
-                                                if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                                    config.studyConfig.allowNotification
-                                                } else {
-                                                    config.quickConfig.allowNotification
-                                                }
+                                                config.currentModeConfig().allowNotification
 
                                             if (allowNotification) {
                                                 val notifyTitle =
@@ -317,15 +309,12 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                             }
                                         } else {
                                             updateStatus(BallStatus.ERROR)
-                                            VibrationUtils.vibrateError(this@MainService)
+                                            SystemUtils.vibrateError(this@MainService)
+                                            drawerManager?.hide()
 
                                             // 发送失败通知
                                             val allowNotification =
-                                                if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                                    config.studyConfig.allowNotification
-                                                } else {
-                                                    config.quickConfig.allowNotification
-                                                }
+                                                config.currentModeConfig().allowNotification
 
                                             if (allowNotification) {
                                                 NotificationUtils.sendResultNotification(
@@ -338,6 +327,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                             historyRepository.updateHistoryItem(historyId) { current ->
                                                 current.copy(
+                                                    title = current.title ?: "解析失败",
                                                     result = result.detail,
                                                     status = AnalysisStatus.FAILURE
                                                 )
@@ -347,6 +337,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                         image.recycle()
                                     }
                                 } catch (e: CancellationException) {
+                                    drawerManager?.hide()
                                     cleanupScope.launch {
                                         historyRepository.updateHistoryItem(historyId) { current ->
                                             current.copy(
@@ -375,14 +366,10 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 }
                                 android.util.Log.e("SolveX", "截图失败: $captureHint")
                                 updateStatus(BallStatus.ERROR)
-                                VibrationUtils.vibrateError(this@MainService)
+                                SystemUtils.vibrateError(this@MainService)
+                                drawerManager?.hide()
 
-                                val allowNotification =
-                                    if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                        config.studyConfig.allowNotification
-                                    } else {
-                                        config.quickConfig.allowNotification
-                                    }
+                                val allowNotification = config.currentModeConfig().allowNotification
                                 if (allowNotification) {
                                     NotificationUtils.sendResultNotification(
                                         this@MainService,
@@ -392,16 +379,19 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 }
                             }
                         } catch (_: CancellationException) {
+                            drawerManager?.hide()
                         } catch (e: Exception) {
                             android.util.Log.e("SolveX", "流程异常", e)
                             updateStatus(BallStatus.ERROR)
-                            VibrationUtils.vibrateError(this@MainService)
+                            SystemUtils.vibrateError(this@MainService)
+                            drawerManager?.hide()
 
                             currentHistoryId?.let { historyId ->
                                 lifecycle.coroutineScope.launch {
                                     historyRepository.updateHistoryItem(historyId) { current ->
                                         current.copy(
-                                            result = e.message ?: "未知错误",
+                                            title = current.title ?: "解析失败",
+                                            result = SseStreamClient.translateNetworkException(e),
                                             status = AnalysisStatus.FAILURE
                                         )
                                     }
@@ -410,17 +400,12 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                             try {
                                 val config = repository.appConfigFlow.first()
-                                val allowNotification =
-                                    if (config.selectedMode == ProjectMode.STUDY_MODE) {
-                                        config.studyConfig.allowNotification
-                                    } else {
-                                        config.quickConfig.allowNotification
-                                    }
+                                val allowNotification = config.currentModeConfig().allowNotification
                                 if (allowNotification) {
                                     NotificationUtils.sendResultNotification(
                                         this@MainService,
                                         "解析异常",
-                                        e.message ?: "未知错误"
+                                        SseStreamClient.translateNetworkException(e)
                                     )
                                 }
                             } catch (_: Exception) { /* 通知发送失败不影响主流程 */
@@ -435,10 +420,11 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
             onDoubleClick = {
                 processingJob?.cancel()
                 processingJob = null
+                drawerManager?.hide()
                 updateStatus(BallStatus.IDLE)
             }
             onLongClick = {
-                VibrationUtils.vibrate(this@MainService, 50)
+                SystemUtils.vibrate(this@MainService, 50)
                 switchEngine()
             }
         }
@@ -446,6 +432,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         lifecycle.coroutineScope.launch {
             repository.appConfigFlow.collect { config ->
                 floatingBallManager?.enableAutoHide = config.permissions.enableAutoHideBall
+                floatingBallManager?.ballFullSizeDp = config.permissions.ballFullSizeDp
             }
         }
     }
@@ -459,7 +446,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                 EngineType.VISION_ENGINE
             }
             repository.saveAppConfig(config.copy(selectedEngine = newEngine))
-            VibrationUtils.vibrate(this@MainService, 100)
+            SystemUtils.vibrate(this@MainService, 100)
         }
     }
 

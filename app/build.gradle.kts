@@ -1,3 +1,6 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,32 +10,60 @@ plugins {
 }
 
 android {
+
+    namespace = "com.tianhuiu.solvex"
+    compileSdk = 36
+
     signingConfigs {
         create("release") {
-            storeFile = file("E:\\xingtian\\桌面\\JKS\\SolveX")
+            storeFile = file("G:\\MyProject\\SolveX\\JKS\\SolveX")
             storePassword = "SolveX-Key"
             keyAlias = "SolveX"
             keyPassword = "SolveX-Key"
         }
     }
-    namespace = "com.tianhuiu.solvex"
-    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.tianhuiu.solvex"
 
-        minSdk = 24
+        minSdk = 31
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.0.3-alpha"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = 4
+        versionName = "0.0.4-alpha"
+
+        testInstrumentationRunner =
+            "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a")
+            isUniversalApk = false
+        }
+    }
+
+    applicationVariants.all {
+        outputs.all {
+            val output = this as BaseVariantOutputImpl
+            output.outputFileName = "app-release.apk"
+        }
+    }
+
     buildTypes {
+
+        debug {
+            isDebuggable = true
+        }
+
         release {
             signingConfig = signingConfigs.getByName("release")
+
             isMinifyEnabled = true
             isShrinkResources = true
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -40,22 +71,9 @@ android {
         }
     }
 
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a")
-            isUniversalApk = false
-        }
-    }
-
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = "11"
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -71,35 +89,53 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.service)
+
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
+
     implementation(platform(libs.androidx.compose.bom))
+
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.gson)
+
     implementation(libs.androidx.datastore.preferences)
+
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+
     implementation(libs.okhttp)
     implementation(libs.okhttp.sse)
+
     implementation(libs.mlkit.text.recognition.chinese)
+
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.kotlinx.serialization.json)
+
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
 
     testImplementation(libs.junit)
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

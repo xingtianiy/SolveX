@@ -17,7 +17,7 @@ class AppConfigTest {
         assertTrue(config.assistants.isEmpty())
         assertTrue(config.autoScrollContent)
         assertEquals(EngineType.VISION_ENGINE, config.selectedEngine)
-        assertEquals(ProjectMode.STUDY_MODE, config.selectedMode)
+        assertEquals("study", config.selectedModeId)
     }
 
     @Test
@@ -56,12 +56,15 @@ class AppConfigTest {
                     "widthPercent": 0.8
                 }
             },
-            "studyConfig": {
-                "firstDeltaTimeoutSeconds": 30
-            },
-            "quickConfig": {
-                "firstDeltaTimeoutSeconds": 10,
-                "showFloatingToast": false
+            "selectedModeId": "study",
+            "modeConfigs": {
+                "study": {
+                    "firstDeltaTimeoutSeconds": 30
+                },
+                "quick": {
+                    "firstDeltaTimeoutSeconds": 10,
+                    "showFloatingToast": false
+                }
             },
             "autoScrollContent": false
         }
@@ -84,9 +87,9 @@ class AppConfigTest {
         assertEquals(CaptureMode.SYSTEM, config.permissions.captureMode)
         assertEquals(DrawerSide.LEFT, config.permissions.drawerSettings.side)
 
-        assertEquals(30L, config.studyConfig.firstDeltaTimeoutSeconds)
-        assertEquals(10L, config.quickConfig.firstDeltaTimeoutSeconds)
-        assertFalse(config.quickConfig.showFloatingToast)
+        assertEquals(30L, config.modeConfigs["study"]?.firstDeltaTimeoutSeconds)
+        assertEquals(10L, config.modeConfigs["quick"]?.firstDeltaTimeoutSeconds)
+        assertFalse(config.modeConfigs["quick"]?.showFloatingToast ?: true)
         assertFalse(config.autoScrollContent)
     }
 

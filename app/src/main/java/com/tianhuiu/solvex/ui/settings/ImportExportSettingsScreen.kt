@@ -2,14 +2,51 @@ package com.tianhuiu.solvex.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -20,7 +57,7 @@ import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.SolveXDialog
-import com.tianhuiu.solvex.utils.NotificationUtils
+import com.tianhuiu.solvex.utils.SystemUtils
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -68,9 +105,9 @@ fun ImportExportSettingsScreen(
                 context.contentResolver.openOutputStream(it)?.use { outputStream ->
                     outputStream.write(exportContent.toByteArray())
                 }
-                NotificationUtils.showToast(context, "配置已成功保存")
+                SystemUtils.showToast(context, "配置已成功保存")
             } catch (e: Exception) {
-                NotificationUtils.showFeedback(
+                SystemUtils.showFeedback(
                     context,
                     userMessage = "导出失败",
                     detailedLog = "Export failed: ${e.message}",
@@ -93,7 +130,7 @@ fun ImportExportSettingsScreen(
                         pendingImportData = data
                         showImportDialog = true
                     } else {
-                        NotificationUtils.showFeedback(
+                        SystemUtils.showFeedback(
                             context,
                             userMessage = "文件格式错误",
                             detailedLog = "Selected file is not a valid configuration format"
@@ -101,7 +138,7 @@ fun ImportExportSettingsScreen(
                     }
                 }
             } catch (e: Exception) {
-                NotificationUtils.showFeedback(
+                SystemUtils.showFeedback(
                     context,
                     userMessage = "读取失败",
                     detailedLog = "Read failed: ${e.message}",
@@ -269,7 +306,7 @@ fun ImportExportSettingsScreen(
                     onClick = {
                         pendingImportData?.let {
                             viewModel.importConfig(it)
-                            NotificationUtils.showToast(
+                            SystemUtils.showToast(
                                 context,
                                 "导入成功"
                             )

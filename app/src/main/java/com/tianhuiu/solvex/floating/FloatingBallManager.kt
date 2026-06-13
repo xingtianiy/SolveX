@@ -69,6 +69,7 @@ class FloatingBallManager(private val context: Context) {
                 resetHideTimer()
             }
         }
+    var ballFullSizeDp by mutableStateOf(40f)
     var status by mutableStateOf(BallStatus.IDLE)
     private var displayMode by mutableStateOf(BallDisplayMode.FULL)
     private var isAtLeftEdge by mutableStateOf(value = true)
@@ -107,7 +108,8 @@ class FloatingBallManager(private val context: Context) {
                     status = status,
                     displayMode = displayMode,
                     isAtLeftEdge = isAtLeftEdge,
-                    ballText = ballText
+                    ballText = ballText,
+                    ballFullSizeDp = ballFullSizeDp,
                 )
             }
 
@@ -216,7 +218,8 @@ class FloatingBallManager(private val context: Context) {
      */
     private fun getCurrentBallWidthPx(): Int {
         val density = context.resources.displayMetrics.density
-        val dpValue = if (displayMode == BallDisplayMode.FULL) 36 else 10
+        val dpValue =
+            if (displayMode == BallDisplayMode.FULL) ballFullSizeDp else (ballFullSizeDp * BALL_HIDDEN_RATIO)
         return (dpValue * density).toInt()
     }
 

@@ -1,15 +1,16 @@
 package com.tianhuiu.solvex.utils
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.widget.Toast
 
-/**
- * 震动工具类：提供设备震动反馈功能。
- */
-object VibrationUtils {
+// 系统工具类：震动、剪贴板、Toast
+object SystemUtils {
     @Volatile
     private var cachedVibrator: Vibrator? = null
 
@@ -17,9 +18,9 @@ object VibrationUtils {
         return cachedVibrator ?: synchronized(this) {
             cachedVibrator ?: run {
                 val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val vibratorManager =
+                    val vm =
                         context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                    vibratorManager.defaultVibrator
+                    vm.defaultVibrator
                 } else {
                     @Suppress("DEPRECATION")
                     context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -30,12 +31,8 @@ object VibrationUtils {
         }
     }
 
-    /**
-     * 触发指定时长的震动。
-     */
     fun vibrate(context: Context, durationMillis: Long = 100) {
         val vibrator = getVibrator(context.applicationContext)
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(
                 VibrationEffect.createOneShot(
@@ -49,17 +46,30 @@ object VibrationUtils {
         }
     }
 
-    /**
-     * 触发成功反馈震动（短震）。
-     */
-    fun vibrateSuccess(context: Context) {
-        vibrate(context, 100)
+    fun vibrateSuccess(context: Context) = vibrate(context, 100)
+    fun vibrateError(context: Context) = vibrate(context, 300)
+
+    fun copyToClipboard(context: Context, text: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("SolveX Answer", text))
     }
 
-    /**
-     * 触发错误反馈震动（长震）。
-     */
-    fun vibrateError(context: Context) {
-        vibrate(context, 300)
+    fun showToast(context: Context, message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
+    fun showFeedback(
+        context: Context,
+        userMessage: String,
+        detailedLog: String? = null,
+        tag: String = "SolveX",
+        priority: Int = android.util.Log.ERROR,
+        throwable: Throwable? = null
+    ) {
+        Toast.makeText(context, userMessage, Toast.LENGTH_SHORT).show()
+        val logContent = detailedLog ?: userMessage
+        val fullLog =
+            logContent + (throwable?.let { "\n" + android.util.Log.getStackTraceString(it) } ?: "")
+        android.util.Log.println(priority, tag, fullLog)
     }
 }

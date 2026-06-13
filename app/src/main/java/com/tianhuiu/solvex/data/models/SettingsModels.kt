@@ -1,5 +1,7 @@
 package com.tianhuiu.solvex.data.models
 
+import com.tianhuiu.solvex.mode.ModeConfig
+import com.tianhuiu.solvex.mode.ModeRegistry
 import kotlinx.serialization.Serializable
 
 /**
@@ -20,15 +22,6 @@ enum class ProviderKind(val displayName: String) {
 enum class EngineType(val displayName: String) {
     TEXT_ENGINE("文本引擎"),
     VISION_ENGINE("视觉引擎"),
-}
-
-/**
- * 项目运行模式。
- */
-@Serializable
-enum class ProjectMode(val displayName: String, val description: String) {
-    STUDY_MODE("常规模式", "展示解题思路和答案片段"),
-    QUICK_MODE("自动模式", "悬浮球展示选择题答案/填空题自动复制"),
 }
 
 /**
@@ -57,6 +50,7 @@ data class AssistantConfig(
     val ocrPrompt: String,
     val textPrompt: String,
     val visionPrompt: String,
+    val useStructuredExtraction: Boolean = true,
 )
 
 /**
@@ -86,41 +80,8 @@ data class PermissionSettings(
     val allowNotificationAuto: Boolean = true,
     val enableAutoHideBall: Boolean = true,
     val captureMode: String = CaptureMode.SYSTEM,
-    val drawerSettings: DrawerSettings = DrawerSettings()
-)
-
-/**
- * 常规学习模式下的具体工作流配置。
- */
-@Serializable
-data class StudyModeConfig(
-    val allowNotification: Boolean = true,
-    val showFloatingToast: Boolean = true,
-    val autoOpenDrawer: Boolean = true,
-    val ocrProviderId: String? = null,
-    val ocrModel: String? = null,
-    val textProviderId: String? = null,
-    val textModel: String? = null,
-    val visionProviderId: String? = null,
-    val visionModel: String? = null,
-    val firstDeltaTimeoutSeconds: Long = 10,
-)
-
-/**
- * 自动模式下的具体工作流配置。
- */
-@Serializable
-data class QuickModeConfig(
-    val allowNotification: Boolean = true,
-    val showFloatingToast: Boolean = true,
-    val autoOpenDrawer: Boolean = false,
-    val ocrProviderId: String? = null,
-    val ocrModel: String? = null,
-    val textProviderId: String? = null,
-    val textModel: String? = null,
-    val visionProviderId: String? = null,
-    val visionModel: String? = null,
-    val firstDeltaTimeoutSeconds: Long = 10,
+    val drawerSettings: DrawerSettings = DrawerSettings(),
+    val ballFullSizeDp: Float = 42f,
 )
 
 /**
@@ -147,11 +108,15 @@ data class AppConfig(
     val providers: List<ModelProvider> = emptyList(),
     val assistants: List<AssistantConfig> = emptyList(),
     val permissions: PermissionSettings = PermissionSettings(),
-    val studyConfig: StudyModeConfig = StudyModeConfig(),
-    val quickConfig: QuickModeConfig = QuickModeConfig(),
     val defaultProviderId: String? = null,
     val selectedAssistantId: String? = null,
     val selectedEngine: EngineType = EngineType.VISION_ENGINE,
-    val selectedMode: ProjectMode = ProjectMode.STUDY_MODE,
+    val selectedModeId: String = ModeRegistry.defaultId(),
+    val modeConfigs: Map<String, ModeConfig> = emptyMap(),
     val autoScrollContent: Boolean = true,
 )
+
+// 获取当前模式配置
+fun AppConfig.currentModeConfig(): ModeConfig {
+    return modeConfigs[selectedModeId] ?: ModeRegistry.get(selectedModeId).defaultConfig()
+}

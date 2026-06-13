@@ -20,17 +20,17 @@ import com.tianhuiu.solvex.data.models.DownloadStatus
 import com.tianhuiu.solvex.data.models.EngineType
 import com.tianhuiu.solvex.data.models.ModelProvider
 import com.tianhuiu.solvex.data.models.PermissionSettings
-import com.tianhuiu.solvex.data.models.ProjectMode
 import com.tianhuiu.solvex.data.models.ProviderKind
-import com.tianhuiu.solvex.data.models.QuickModeConfig
-import com.tianhuiu.solvex.data.models.StudyModeConfig
 import com.tianhuiu.solvex.data.models.UpdateLevel
 import com.tianhuiu.solvex.data.models.VersionInfo
+import com.tianhuiu.solvex.data.models.currentModeConfig
+import com.tianhuiu.solvex.mode.ModeConfig
+import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.network.UnifiedLLMClient
+import com.tianhuiu.solvex.network.UpdateManager
 import com.tianhuiu.solvex.service.MainService
 import com.tianhuiu.solvex.service.SolveXAccessibilityService
-import com.tianhuiu.solvex.utils.NotificationUtils
-import com.tianhuiu.solvex.utils.UpdateManager
+import com.tianhuiu.solvex.utils.SystemUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -81,16 +81,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var selectedEngine by mutableStateOf(EngineType.VISION_ENGINE)
         private set
-    var selectedMode by mutableStateOf(ProjectMode.STUDY_MODE)
+    var selectedModeId by mutableStateOf(ModeRegistry.defaultId())
         private set
 
     var autoScrollContent by mutableStateOf(true)
         private set
 
-    var studyConfig by mutableStateOf(StudyModeConfig())
-        private set
-
-    var quickConfig by mutableStateOf(QuickModeConfig())
+    var currentModeConfig by mutableStateOf(ModeConfig())
         private set
 
     var defaultProviderId by mutableStateOf<String?>(null)
@@ -108,7 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isServiceRunning by mutableStateOf(false)
         private set
 
-    var activeMode by mutableStateOf<ProjectMode?>(null)
+    var activeModeId by mutableStateOf<String?>(null)
         private set
 
     var showStopConfirmationDialog by mutableStateOf(false)
@@ -118,6 +115,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var isShizukuPermissionGranted by mutableStateOf(false)
+        private set
+
+    var isShizukuInstalled by mutableStateOf(false)
         private set
 
     var isAccessibilityEnabled by mutableStateOf(false)
@@ -153,11 +153,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             MainService.isRunning.collect { running ->
                 isServiceRunning = running
                 if (running) {
-                    if (activeMode == null) {
-                        repository.appConfigFlow.first().let { activeMode = it.selectedMode }
+                    if (activeModeId == null) {
+                        repository.appConfigFlow.first().let { activeModeId = it.selectedModeId }
                     }
                 } else {
-                    activeMode = null
+                    activeModeId = null
                 }
             }
         }
@@ -172,9 +172,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     permissions = config.permissions
                     selectedAssistantId = config.selectedAssistantId
                     selectedEngine = config.selectedEngine
-                    selectedMode = config.selectedMode
-                    studyConfig = config.studyConfig
-                    quickConfig = config.quickConfig
+                    selectedModeId = config.selectedModeId
+                    currentModeConfig = config.currentModeConfig()
                     defaultProviderId = config.defaultProviderId
                     autoScrollContent = config.autoScrollContent
                     checkPermissions()
@@ -187,9 +186,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val lastCheck = repository.lastUpdateCheckFlow.first()
             val consecutiveNoUpdate = repository.consecutiveNoUpdateFlow.first()
             val now = System.currentTimeMillis()
+            val isCriticalPending = updateInfo?.updateLevel == UpdateLevel.CRITICAL
 
-            // 自适应间隔：连续无更新则延长，发现过更新则缩短
+            // 强制更新：每次启动都必须检查，直到更新完成
             val intervalDays = when {
+                isCriticalPending -> 0L
                 consecutiveNoUpdate >= 3 -> 14L
                 updateInfo != null -> 1L
                 else -> 7L
@@ -205,6 +206,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             launchCount = repository.launchCountFlow.first()
             repository.incrementLaunchCount()
         }
+
+        // Shizuku 生命周期监听
+        Shizuku.addBinderReceivedListener {
+            isShizukuRunning = true
+            checkPermissions()
+        }
+        Shizuku.addBinderDeadListener {
+            isShizukuRunning = false
+            isShizukuPermissionGranted = false
+        }
+        Shizuku.addRequestPermissionResultListener { _, grantResult ->
+            isShizukuPermissionGranted =
+                grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
     }
 
     /**
@@ -214,9 +229,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (manual) isCheckingUpdate = true
 
-            // critical 级别忽略频率限制
+            // 强制更新允许重复检测，确保每次启动都检查
             if (!manual && updateInfo?.updateLevel == UpdateLevel.CRITICAL) {
-                return@launch // 已展示 critical 弹窗，不重复检测
+                // 继续检查，不跳过
             }
 
             val savedEtag = repository.updateEtagFlow.first()
@@ -243,7 +258,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             (repository.consecutiveNoUpdateFlow.first()) + 1
                         )
                         if (manual) {
-                            NotificationUtils.showToast(
+                            SystemUtils.showToast(
                                 getApplication(),
                                 "当前已是最新版本"
                             )
@@ -254,13 +269,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (manual) isCheckingUpdate = false
 
                     // NotModifiedException 表示版本未变化（304）
-                    if (error is com.tianhuiu.solvex.utils.UpdateManager.NotModifiedException) {
+                    if (error is com.tianhuiu.solvex.network.UpdateManager.NotModifiedException) {
                         repository.saveLastUpdateCheck(System.currentTimeMillis())
                         repository.saveConsecutiveNoUpdate(
                             (repository.consecutiveNoUpdateFlow.first()) + 1
                         )
                         if (manual) {
-                            NotificationUtils.showToast(
+                            SystemUtils.showToast(
                                 getApplication(),
                                 "当前已是最新版本"
                             )
@@ -275,7 +290,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             val cachedInfo = updateManager.parseCachedVersion(cachedJson)
                             if (cachedInfo != null && cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
                                 updateInfo = cachedInfo
-                                NotificationUtils.showToast(
+                                SystemUtils.showToast(
                                     getApplication(),
                                     "网络不可用，显示上次缓存的更新信息"
                                 )
@@ -284,7 +299,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         val message = error.message ?: "未知错误"
-                        NotificationUtils.showFeedback(
+                        SystemUtils.showFeedback(
                             getApplication(),
                             userMessage = "检查更新失败",
                             detailedLog = "Update check failed: $message"
@@ -327,16 +342,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             delay(300)
             repository.saveAppConfig(
                 AppConfig(
-                    providers,
-                    assistants,
-                    permissions,
-                    studyConfig,
-                    quickConfig,
-                    defaultProviderId,
-                    selectedAssistantId,
-                    selectedEngine,
-                    selectedMode,
-                    autoScrollContent
+                    providers = providers,
+                    assistants = assistants,
+                    permissions = permissions,
+                    defaultProviderId = defaultProviderId,
+                    selectedAssistantId = selectedAssistantId,
+                    selectedEngine = selectedEngine,
+                    selectedModeId = selectedModeId,
+                    modeConfigs = mapOf(selectedModeId to currentModeConfig),
+                    autoScrollContent = autoScrollContent
                 )
             )
         }
@@ -386,8 +400,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         save()
     }
 
-    fun setMode(mode: ProjectMode) {
-        selectedMode = mode
+    fun setMode(modeId: String) {
+        selectedModeId = modeId
         save()
     }
 
@@ -402,13 +416,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkPermissions()
     }
 
-    fun updateStudyConfig(config: StudyModeConfig) {
-        studyConfig = config
-        save()
-    }
-
-    fun updateQuickConfig(config: QuickModeConfig) {
-        quickConfig = config
+    fun updateModeConfig(config: ModeConfig) {
+        currentModeConfig = config
         save()
     }
 
@@ -419,6 +428,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateAutoScrollContent(enabled: Boolean) {
         autoScrollContent = enabled
+        save()
+    }
+
+    fun updateBallSize(fullSizeDp: Float) {
+        permissions = permissions.copy(ballFullSizeDp = fullSizeDp)
         save()
     }
 
@@ -458,7 +472,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             save()
         } catch (e: Exception) {
-            NotificationUtils.showFeedback(
+            SystemUtils.showFeedback(
                 getApplication(),
                 userMessage = "导入失败",
                 detailedLog = "Config import failed",
@@ -545,7 +559,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             NotificationManagerCompat.from(context).areNotificationsEnabled()
 
         // Shizuku 状态
-        isShizukuRunning = Shizuku.pingBinder()
+        isShizukuInstalled = isShizukuPackageInstalled()
+        isShizukuRunning = if (isShizukuInstalled) Shizuku.pingBinder() else false
         isShizukuPermissionGranted = if (isShizukuRunning) {
             Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED
         } else false
@@ -561,6 +576,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isNotificationGranted = isNotificationPermissionGranted,
             isAccessibilityEnabled = isAccessibilityEnabled,
             isShizukuGranted = isShizukuPermissionGranted,
+            isShizukuInstalled = isShizukuInstalled,
+            isShizukuRunning = isShizukuRunning,
             captureMode = permissions.captureMode,
             isServiceRunning = isServiceRunning,
             launchCount = launchCount,
@@ -621,6 +638,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * 检查 Shizuku 应用是否已安装。
+     */
+    private fun isShizukuPackageInstalled(): Boolean {
+        return try {
+            val context = getApplication<Application>()
+            context.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
+            true
+        } catch (_: Exception) {
+            try {
+                val context = getApplication<Application>()
+                context.packageManager.getPackageInfo("dev.rikka.shizuku", 0)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    /**
      * 启动后台核心服务。根据截屏模式分发：
      * - SYSTEM: 触发 MediaProjection 权限弹窗
      * - SHIZUKU: 检查 Shizuku 权限后直接启动
@@ -629,7 +665,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startService() {
         if (!isOverlayPermissionGranted) return
 
-        activeMode = selectedMode
+        activeModeId = selectedModeId
 
         when (permissions.captureMode) {
             CaptureMode.SYSTEM -> {
@@ -671,7 +707,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             action = MainService.ACTION_STOP
         }
         context.stopService(intent)
-        activeMode = null
+        activeModeId = null
         showStopConfirmationDialog = false
         checkPermissions()
     }
@@ -696,15 +732,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 id = UUID.randomUUID().toString(),
                 name = "题目解答助手",
                 ocrPrompt = "你是一个精准的题目转录员。请直接原文输出图片中的题目文本和选项，严禁改写。如果是数学题，请使用 LaTeX 语法确保公式和符号渲染准确。",
-                textPrompt = "你是一个资深的解题专家。请对提取出的题目进行深度解析，并严格按照以下结构输出：\n\n### 解题思路\n[分步骤详细说明解题过程。对于选择题，请逐一分析选项。]\n\n### 关键知识点\n[总结本题涉及的核心公式、定理或概念。]\n\n### 最终答案\n[重要：此处必须提供最终结论。请直接输出纯文本答案，严禁使用 LaTeX、Markdown 加粗或任何格式化标记，只允许纯文本输出。]",
-                visionPrompt = "你是一个拥有视觉感知能力的解题专家。请结合图片细节进行深度解析，并严格按照以下结构输出：\n\n### 解题思路\n[分步骤详细说明解题过程。]\n\n### 关键知识点\n[总结核心考点。]\n\n### 最终答案\n[重要：此处必须提供最终结论。请直接输出纯文本答案，严禁使用 LaTeX、Markdown 加粗或任何格式化标记。]"
+                textPrompt = "你是一个资深的解题专家。请对提取出的题目进行深度解析。\n\n输出规范：\n- 必须包含且仅包含以下三个模块：### 题目分析、### 解题步骤、### 最终答案\n- **公式优先**：强烈建议并优先使用复杂的专业 LaTeX 公式。解题过程应尽量使用文字描述逻辑，减少简单的 1, 2, 3 编号公式，将数学表达融入到高质量的复杂公式中。\n- 禁止输出 JSON、XML、YAML、表格或代码块包裹正文\n- 每个标题下必须有实质内容，禁止空标题",
+                visionPrompt = "你是一个拥有视觉感知能力的解题专家。请结合图片细节进行深度解析。\n\n输出规范：\n- 必须包含且仅包含以下三个模块：### 题目分析、### 解题步骤、### 最终答案\n- **公式优先**：强烈建议并优先使用复杂的专业 LaTeX 公式。解题过程应尽量使用文字描述逻辑，减少简单的 1, 2, 3 编号公式，将数学表达融入到高质量的复杂公式中。\n- 禁止输出 JSON、XML、YAML、表格或代码块包裹正文\n- 每个标题下必须有实质内容，禁止空标题"
             ),
             AssistantConfig(
                 id = UUID.randomUUID().toString(),
                 name = "聊天总结助手",
-                ocrPrompt = "你是一个高效的对话提取员。请按时间顺序提取截图中的聊天记录，包括发言人、时间（如果有）和消息内容。",
-                textPrompt = "你是一个专业的内容分析师。请对提供的聊天记录进行精简总结，重点提取核心话题、主要观点、达成的共识以及待办事项。请使用简洁的列表形式输出。\n\n### 最终答案\n[请在此处提供一句话核心总结，使用纯文本，严禁格式化。]",
-                visionPrompt = "你是一个专业的内容分析师。请观察截图中的聊天界面，对对话内容进行精简总结，提取核心话题和关键结论。请使用简洁的列表形式输出。\n\n### 最终答案\n[请在此处提供一句话核心总结，使用纯文本，严禁格式化。]"
+                ocrPrompt = "你是一个高效的对话提取员。请按时间顺序提取截图中的聊天记录，包括发言人、时间（如果有）和消息内容，但是需要排除屏幕无关信息。请直接输出文本，不要使用任何 JSON 格式。",
+                textPrompt = "你是一个专业的内容分析师。请对提供的聊天记录进行精简总结，重点提取核心话题、主要观点、达成的共识以及待办事项。\n\n输出规范：\n- 使用 Markdown 三级标题（###）划分模块，例如：### 会话背景、### 核心讨论、### 结论摘要\n- 严禁按照题目解析的格式输出，请根据聊天内容的实际情况灵活调整模块标题，确保总结的高效性\n- 禁止输出 JSON、XML、YAML、表格或代码块包裹正文",
+                visionPrompt = "你是一个专业的内容分析师。请观察截图中的聊天界面，对对话内容进行精简总结，提取核心话题和关键结论。\n\n输出规范：\n- 使用 Markdown 三级标题（###）划分模块，例如：### 界面概览、### 对话要点、### 行动指南\n- 严禁按照题目解析的格式输出，请根据聊天内容的实际情况灵活调整模块标题\n- 禁止输出 JSON、XML、YAML、表格或代码块包裹正文",
+                useStructuredExtraction = false,
             )
         )
         permissions = PermissionSettings()

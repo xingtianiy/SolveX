@@ -1,4 +1,4 @@
-package com.tianhuiu.solvex.utils
+package com.tianhuiu.solvex.network
 
 import android.content.Context
 import android.content.Intent
@@ -47,8 +47,6 @@ class UpdateManager(
 
     /**
      * 竞速检测新版本：并行请求所有源，取最快成功响应。
-     * @param etag 上次保存的 ETag，用于条件请求
-     * @return Pair<VersionInfo, String?> 版本信息和新的 ETag
      */
     suspend fun checkUpdate(etag: String? = null): Result<Pair<VersionInfo, String?>> =
         withContext(Dispatchers.IO) {
@@ -58,7 +56,6 @@ class UpdateManager(
                 }
             }
 
-            // 收集首个成功结果
             var lastError: Throwable? = null
             for (d in deferred) {
                 d.await().fold(
@@ -70,10 +67,6 @@ class UpdateManager(
             Result.failure(lastError ?: Exception("更新源不可用"))
         }
 
-    /**
-     * 请求单个源，支持 ETag 条件请求。
-     * @return Result<Pair<VersionInfo, String?>> 版本信息 + 新 ETag
-     */
     private fun fetchVersionInfo(
         url: String,
         sourceName: String,
@@ -90,7 +83,6 @@ class UpdateManager(
             val request = requestBuilder.build()
 
             client.newCall(request).execute().use { response ->
-                // 304 Not Modified — 版本未变化
                 if (response.code == 304) {
                     return Result.failure(NotModifiedException(sourceName))
                 }
@@ -168,9 +160,6 @@ class UpdateManager(
         }
     }.flowOn(Dispatchers.IO)
 
-    /**
-     * 核心下载逻辑。
-     */
     private fun performDownload(url: String): Flow<DownloadStatus> = flow {
         try {
             val request = Request.Builder()
@@ -186,7 +175,6 @@ class UpdateManager(
                 val body = response.body ?: throw Exception("响应体为空")
                 val totalBytes = body.contentLength()
 
-                // 验证内容类型
                 val contentType = response.header("Content-Type") ?: ""
                 if (contentType.contains("text/html")) {
                     emit(DownloadStatus.Error("下载链接失效"))
@@ -220,7 +208,6 @@ class UpdateManager(
                     }
                 }
 
-                // 校验文件完整性
                 if (totalBytes > 0 && destinationFile.length() < totalBytes) {
                     emit(DownloadStatus.Error("文件下载不完整"))
                 } else {

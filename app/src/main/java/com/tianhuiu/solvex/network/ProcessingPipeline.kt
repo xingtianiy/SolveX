@@ -13,7 +13,8 @@ import com.tianhuiu.solvex.data.models.ProcessingEvent
 import com.tianhuiu.solvex.data.models.ProcessingResult
 import com.tianhuiu.solvex.data.models.ProcessingRoute
 import com.tianhuiu.solvex.data.models.ProcessingStatus
-import com.tianhuiu.solvex.data.models.ProjectMode
+import com.tianhuiu.solvex.data.models.currentModeConfig
+import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.utils.AutomationTools
 import com.tianhuiu.solvex.utils.FileUtils
 import kotlinx.coroutines.CancellationException
@@ -57,55 +58,28 @@ class ProcessingPipeline(
             ?: config.assistants.firstOrNull()
             ?: error("请先配置助手")
 
-        val (textPid, textModel, visionPid, visionModel, ocrPid, ocrModel, timeout, defaultPid) = when (config.selectedMode) {
-            ProjectMode.STUDY_MODE -> {
-                val c = config.studyConfig
-                DataConfig(
-                    c.textProviderId,
-                    c.textModel,
-                    c.visionProviderId,
-                    c.visionModel,
-                    c.ocrProviderId,
-                    c.ocrModel,
-                    c.firstDeltaTimeoutSeconds,
-                    config.defaultProviderId
-                )
-            }
+        val c = config.currentModeConfig()
+        val defaultPid = config.defaultProviderId
 
-            ProjectMode.QUICK_MODE -> {
-                val c = config.quickConfig
-                DataConfig(
-                    c.textProviderId,
-                    c.textModel,
-                    c.visionProviderId,
-                    c.visionModel,
-                    c.ocrProviderId,
-                    c.ocrModel,
-                    c.firstDeltaTimeoutSeconds,
-                    config.defaultProviderId
-                )
-            }
-        }
-
-        val finalTextPid = textPid ?: defaultPid
-        val finalVisionPid = visionPid ?: defaultPid
-        val finalOcrPid = ocrPid ?: defaultPid
+        val finalTextPid = c.textProviderId ?: defaultPid
+        val finalVisionPid = c.visionProviderId ?: defaultPid
+        val finalOcrPid = c.ocrProviderId ?: defaultPid
 
         val textProvider = config.providers.find { it.id == finalTextPid }
         val visionProvider = config.providers.find { it.id == finalVisionPid }
         val ocrProvider = config.providers.find { it.id == finalOcrPid }
 
-        val resolvedTextModel = if (textModel.isNullOrBlank()) {
+        val resolvedTextModel = if (c.textModel.isNullOrBlank()) {
             textProvider?.defaultTextModel ?: ""
-        } else textModel
+        } else c.textModel
 
-        val resolvedVisionModel = if (visionModel.isNullOrBlank()) {
+        val resolvedVisionModel = if (c.visionModel.isNullOrBlank()) {
             visionProvider?.defaultVisionModel ?: ""
-        } else visionModel
+        } else c.visionModel
 
-        val resolvedOcrModel = if (ocrModel.isNullOrBlank()) {
+        val resolvedOcrModel = if (c.ocrModel.isNullOrBlank()) {
             ocrProvider?.defaultOcrModel ?: ""
-        } else ocrModel
+        } else c.ocrModel
 
         return ResolvedModels(
             assistant = assistant,
@@ -115,21 +89,10 @@ class ProcessingPipeline(
             visionModel = resolvedVisionModel,
             ocrProvider = ocrProvider,
             ocrModel = resolvedOcrModel,
-            firstDeltaTimeoutMillis = (timeout ?: 10L).coerceAtLeast(1) * 1000L,
+            firstDeltaTimeoutMillis = c.firstDeltaTimeoutSeconds.coerceAtLeast(1) * 1000L,
             engine = config.selectedEngine
         )
     }
-
-    private data class DataConfig(
-        val textPid: String?,
-        val textModel: String?,
-        val visionPid: String?,
-        val visionModel: String?,
-        val ocrPid: String?,
-        val ocrModel: String?,
-        val timeout: Long?,
-        val defaultPid: String?
-    )
 
     /**
      * 构建模型摘要描述。
@@ -204,12 +167,24 @@ class ProcessingPipeline(
                 }
 
                 // 提取题目内容（OCR 或 视觉提取）
+                val extractionSystemPrompt = if (models.assistant.useStructuredExtraction) {
+                    "${Prompts.EXTRACTION_SYSTEM_BASE}\n用户配置：${models.assistant.ocrPrompt}"
+                } else {
+                    models.assistant.ocrPrompt
+                }
+
+                val extractionUserPrompt = if (models.assistant.useStructuredExtraction) {
+                    if (models.engine == EngineType.TEXT_ENGINE) Prompts.OCR_EXTRACTION_USER_PROMPT else Prompts.VISION_EXTRACTION_USER_PROMPT
+                } else {
+                    "请提取屏幕中的所有文本内容。"
+                }
+
                 val extractedText = if (models.engine == EngineType.TEXT_ENGINE) {
                     collectTextStream(
                         provider = models.ocrProvider ?: error("未配置 OCR 模型"),
                         model = models.ocrModel,
-                        systemPrompt = "${Prompts.EXTRACTION_SYSTEM_BASE}\n用户配置：${models.assistant.ocrPrompt}",
-                        userPrompt = Prompts.OCR_EXTRACTION_USER_PROMPT,
+                        systemPrompt = extractionSystemPrompt,
+                        userPrompt = extractionUserPrompt,
                         imagesBase64 = listOf(imageBase64),
                         firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
                         onDelta = onQueryExtracted
@@ -218,8 +193,8 @@ class ProcessingPipeline(
                     collectTextStream(
                         provider = models.visionProvider ?: error("未配置视觉模型"),
                         model = models.visionModel,
-                        systemPrompt = "${Prompts.EXTRACTION_SYSTEM_BASE}\n用户配置：${models.assistant.ocrPrompt}",
-                        userPrompt = Prompts.VISION_EXTRACTION_USER_PROMPT,
+                        systemPrompt = extractionSystemPrompt,
+                        userPrompt = extractionUserPrompt,
                         imagesBase64 = listOf(imageBase64),
                         firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
                         onDelta = onQueryExtracted
@@ -280,8 +255,9 @@ class ProcessingPipeline(
 
                 summaryDeferred.await()
 
-                // 检测空结果：模型返回了空内容
-                if (config.selectedMode == ProjectMode.QUICK_MODE && automationAction == null) {
+                // 检测自动化动作是否必需
+                val mode = ModeRegistry.get(config.selectedModeId)
+                if (mode.requiresAutomationAction && automationAction == null) {
                     return@coroutineScope base.copy(
                         status = ProcessingStatus.FAILURE,
                         detail = "自动模式解析失败：模型未返回有效结果，请检查模型是否支持 Chat Completions API"
@@ -303,7 +279,7 @@ class ProcessingPipeline(
                 )
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                base.copy(status = ProcessingStatus.FAILURE, detail = e.message ?: "未知错误")
+                base.copy(status = ProcessingStatus.FAILURE, detail = SseStreamClient.translateNetworkException(e))
             }
         }
     }

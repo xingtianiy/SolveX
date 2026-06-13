@@ -43,10 +43,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -63,14 +63,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tianhuiu.solvex.data.models.HistoryItem
+import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.StatusBadge
+import com.tianhuiu.solvex.utils.DateTimeUtils
 import com.tianhuiu.solvex.utils.FileUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * 历史记录列表屏幕：支持分页加载和长按删除。
@@ -104,21 +104,45 @@ fun HistoryScreen(
 
     val listState = rememberLazyListState()
 
-    // 自动置顶/滚动逻辑：仅当有新任务产生（总数增加）时滚动
-    var prevTotalCount by remember { mutableIntStateOf(totalCount) }
-    LaunchedEffect(totalCount, autoScroll) {
-        if (totalCount > prevTotalCount) {
-            if (autoScroll) {
-                // 跟随内容：滚动到最新项（底部）
-                val lastIndex = filteredItems.size - 1
-                if (lastIndex >= 0) {
-                    listState.animateScrollToItem(lastIndex)
-                }
-            } else {
-                listState.animateScrollToItem(0)
+    // 首次加载及搜索切换时强制置顶
+    // 使用 rememberSaveable 确保从详情页返回或切换标签页时保留此状态
+    var isInitialScrollDone by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(historyItems.isNotEmpty(), searchQuery) {
+        if (historyItems.isNotEmpty()) {
+            if (!isInitialScrollDone || searchQuery.isNotEmpty()) {
+                listState.scrollToItem(0)
+                isInitialScrollDone = true
             }
         }
-        prevTotalCount = totalCount
+    }
+
+    // 自动置顶逻辑：仅当有新任务产生、或最新的任务状态变为 PROCESSING/COMPLETED 时滚动
+    // 使用 remember (非 saveable) 记录上一次状态，页面重创(返回)时会重置为当前值，从而跳过首次触发
+    val latestItem = historyItems.firstOrNull()
+    var prevLatestId by remember { mutableStateOf(latestItem?.id) }
+    var prevLatestStatus by remember { mutableStateOf(latestItem?.status) }
+
+    LaunchedEffect(latestItem?.id, latestItem?.status) {
+        if (latestItem != null) {
+            val isNewItem = latestItem.id != prevLatestId
+            val statusChanged = latestItem.status != prevLatestStatus
+            val isProcessing =
+                latestItem.status == com.tianhuiu.solvex.data.models.AnalysisStatus.PROCESSING
+            val isSuccess =
+                latestItem.status == com.tianhuiu.solvex.data.models.AnalysisStatus.SUCCESS
+
+            // 触发条件：
+            // 1. 这是一个新生成的任务 (id变了)
+            // 2. 最新的任务状态变为了 PROCESSING 或 SUCCESS (且之前不是这个状态)
+            if (isNewItem || (statusChanged && (isProcessing || isSuccess))) {
+                if (autoScroll) {
+                    listState.animateScrollToItem(0)
+                }
+            }
+
+            prevLatestId = latestItem.id
+            prevLatestStatus = latestItem.status
+        }
     }
 
     // 分页加载逻辑
@@ -133,6 +157,14 @@ fun HistoryScreen(
         }
     }
 
+    var initialLoadDone by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(600)
+        initialLoadDone = true
+    }
+    val isInitialLoading = !initialLoadDone && historyItems.isEmpty()
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             val title = if (totalCount > 0) {
@@ -153,7 +185,11 @@ fun HistoryScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             // 搜索栏
             if (totalCount > 0 || searchQuery.isNotEmpty()) {
                 OutlinedTextField(
@@ -215,6 +251,7 @@ fun HistoryScreen(
             }
         }
     }
+    }
 
     // 清空确认弹窗
     if (showClearDialog) {
@@ -251,14 +288,21 @@ fun HistoryScreen(
     }
 }
 
+private fun resolveModeDisplayName(modeId: String): String {
+    return try {
+        ModeRegistry.get(modeId).displayName
+    } catch (_: Exception) {
+        modeId
+    }
+}
+
 /**
  * 历史记录卡片：支持长按触发删除。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HistoryCard(item: HistoryItem, onLongClick: () -> Unit, onClick: () -> Unit) {
-    val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
-    val timeStr = dateFormat.format(Date(item.timestamp))
+    val timeStr = DateTimeUtils.formatShort(item.timestamp)
 
     Card(
         modifier = Modifier
@@ -345,7 +389,7 @@ fun HistoryCard(item: HistoryItem, onLongClick: () -> Unit, onClick: () -> Unit)
 
                     if (item.mode != null) {
                         Text(
-                            text = "· ${item.mode}",
+                            text = "· ${resolveModeDisplayName(item.mode)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f)
                         )

@@ -28,6 +28,8 @@ class AppNotificationManager {
         isNotificationGranted: Boolean,
         isAccessibilityEnabled: Boolean = true,
         isShizukuGranted: Boolean = false,
+        isShizukuInstalled: Boolean = false,
+        isShizukuRunning: Boolean = false,
         captureMode: String = "system",
         isServiceRunning: Boolean = false,
         launchCount: Int = 0,
@@ -70,12 +72,17 @@ class AppNotificationManager {
                 )
             }
             if (captureMode == CaptureMode.SHIZUKU && !isShizukuGranted) {
+                val (title, content) = when {
+                    !isShizukuInstalled -> "Shizuku 未安装" to "请先安装 Shizuku 应用，当前截屏模式依赖 Shizuku 提供 ADB 权限"
+                    !isShizukuRunning -> "Shizuku 未启动" to "请在 Shizuku 应用中启动服务，再返回 SolveX 授权"
+                    else -> "Shizuku 未授权" to "点击右侧按钮授权 SolveX 使用 Shizuku"
+                }
                 nextNotifications.add(
                     InAppNotification(
                         id = "PERM_SHIZUKU",
                         type = NotificationType.PERMISSION,
-                        title = "Shizuku 未授权",
-                        content = "当前截屏模式需要 Shizuku 连接并授权",
+                        title = title,
+                        content = content,
                         permissionType = PermissionType.SHIZUKU
                     )
                 )

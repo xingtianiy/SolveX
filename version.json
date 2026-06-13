@@ -1,12 +1,14 @@
 {
-  "versionCode": 3,
-  "versionName": "0.0.3-alpha",
-  "releaseDate": "2026-06-11",
+  "versionCode": 4,
+  "versionName": "0.0.4-alpha",
+  "releaseDate": "2026-06-13",
   "level": "critical",
-  "apkSize": "16 MB",
+  "apkSize": "18 MB",
   "updateLog": [
-    "优化多项用户体验"
+    "修复历史记录进入详情页闪退的问题",
+    "全页面统一加载动画遮罩，提升加载体验",
+    "清理冗余代码和已弃用配置项，缩减应用体积"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.3-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.3-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.4-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.4-alpha/app-release.apk"
 }

@@ -341,7 +341,7 @@ fun ProviderEditScreen(
                 trailingIcon = {
                     IconButton(onClick = {
                         if (availableModels.isEmpty()) {
-                            com.tianhuiu.solvex.utils.NotificationUtils.showToast(
+                            com.tianhuiu.solvex.utils.SystemUtils.showToast(
                                 context,
                                 "请先获取模型列表"
                             )
@@ -365,7 +365,7 @@ fun ProviderEditScreen(
                 trailingIcon = {
                     IconButton(onClick = {
                         if (availableModels.isEmpty()) {
-                            com.tianhuiu.solvex.utils.NotificationUtils.showToast(
+                            com.tianhuiu.solvex.utils.SystemUtils.showToast(
                                 context,
                                 "请先获取模型列表"
                             )
@@ -389,7 +389,7 @@ fun ProviderEditScreen(
                 trailingIcon = {
                     IconButton(onClick = {
                         if (availableModels.isEmpty()) {
-                            com.tianhuiu.solvex.utils.NotificationUtils.showToast(
+                            com.tianhuiu.solvex.utils.SystemUtils.showToast(
                                 context,
                                 "请先获取模型列表"
                             )
@@ -475,7 +475,7 @@ fun ProviderEditScreen(
                         }
 
                         if (filled.isNotEmpty()) {
-                            com.tianhuiu.solvex.utils.NotificationUtils.showFeedback(
+                            com.tianhuiu.solvex.utils.SystemUtils.showFeedback(
                                 context,
                                 userMessage = "已填充默认模型",
                                 detailedLog = "填充内容: ${filled.joinToString(", ")}",

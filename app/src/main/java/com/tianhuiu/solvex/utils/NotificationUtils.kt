@@ -6,12 +6,11 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.tianhuiu.solvex.R
 
 /**
- * 通知工具类：负责发送系统通知栏消息以及应用内原生 Toast 提示。
+ * 通知工具类：负责发送系统通知栏消息及结果解析。
  */
 object NotificationUtils {
     private const val CHANNEL_ID = "solvex_result_channel"
@@ -96,6 +95,7 @@ object NotificationUtils {
 
     /**
      * 将 JSON 格式的题目渲染为 Markdown。
+     * 如果不是 JSON 格式，则原样返回。
      */
     fun renderStructuredQuestion(rawText: String): String {
         val structured = AutomationTools.parseStructuredQuestion(rawText) ?: return rawText
@@ -140,31 +140,6 @@ object NotificationUtils {
         } else {
             "解析问题" to extractedText
         }
-    }
-
-    /**
-     * 发送一个标准 Android Toast 提示。
-     */
-    fun showToast(context: Context, message: String) {
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-    }
-
-    /**
-     * 统一反馈接口：Toast 提示 + Log 记录。
-     */
-    fun showFeedback(
-        context: Context,
-        userMessage: String,
-        detailedLog: String? = null,
-        tag: String = "SolveX",
-        priority: Int = android.util.Log.ERROR,
-        throwable: Throwable? = null
-    ) {
-        Toast.makeText(context, userMessage, Toast.LENGTH_SHORT).show()
-        val logContent = detailedLog ?: userMessage
-        val fullLog =
-            logContent + (throwable?.let { "\n" + android.util.Log.getStackTraceString(it) } ?: "")
-        android.util.Log.println(priority, tag, fullLog)
     }
 
     /**
