@@ -1,5 +1,6 @@
 package com.tianhuiu.solvex
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
@@ -12,9 +13,11 @@ import androidx.activity.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
+import com.tianhuiu.solvex.data.SettingsRepository
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.SolveXApp
 import com.tianhuiu.solvex.utils.NotificationUtils
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -50,7 +53,21 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 动态控制隐匿模式：从最近任务列表中显示/隐藏
+        lifecycleScope.launch {
+            val repository = SettingsRepository(applicationContext)
+            repository.appConfigFlow.collectLatest { config ->
+                updateRecentsVisibility(config.permissions.enableStealthMode)
+            }
+        }
+
         lifecycle.addObserver(LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                viewModel.registerShizukuListeners()
+            }
+            if (event == Lifecycle.Event.ON_STOP) {
+                viewModel.unregisterShizukuListeners()
+            }
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.checkPermissions()
             }
@@ -64,6 +81,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleDeepLink(intent)
+    }
+
+    private fun updateRecentsVisibility(exclude: Boolean) {
+        try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            am.appTasks.forEach { task ->
+                task.setExcludeFromRecents(exclude)
+            }
+        } catch (e: Exception) {
+            Log.e("SolveX", "Failed to update recents visibility", e)
+        }
     }
 
     private fun handleDeepLink(intent: Intent) {

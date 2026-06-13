@@ -82,6 +82,8 @@ data class PermissionSettings(
     val captureMode: String = CaptureMode.SYSTEM,
     val drawerSettings: DrawerSettings = DrawerSettings(),
     val ballFullSizeDp: Float = 42f,
+    val enableScreenProtection: Boolean = false,
+    val enableStealthMode: Boolean = false,
 )
 
 /**

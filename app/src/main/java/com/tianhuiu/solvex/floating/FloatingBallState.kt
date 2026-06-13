@@ -7,7 +7,8 @@ enum class BallStatus {
     IDLE,       // 空闲
     RUNNING,    // 处理中
     SUCCESS,    // 成功
-    ERROR       // 失败
+    ERROR,      // 失败
+    PROTECTED   // 隐匿保护中
 }
 
 /**

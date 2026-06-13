@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -53,10 +54,33 @@ data class ExportData(
 )
 
 /**
+ * 全局弹窗数据模型。
+ */
+data class GlobalDialogData(
+    val title: String,
+    val message: String,
+    val confirmText: String = "确定",
+    val dismissText: String? = null,
+    val onConfirm: () -> Unit = {},
+    val onDismiss: (() -> Unit)? = null,
+    val isDestructive: Boolean = false,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+)
+
+/**
  * 应用全局 ViewModel：负责管理应用配置、权限状态及核心服务逻辑。
  */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
+
+    init {
+        (application as com.tianhuiu.solvex.SolveXApplication).viewModel = this
+    }
+    override fun onCleared() {
+        super.onCleared()
+        (getApplication<Application>() as com.tianhuiu.solvex.SolveXApplication).viewModel = null
+    }
+
     private val container = (application as com.tianhuiu.solvex.SolveXApplication).container
     private val client = container.okHttpClient
     private val json = Json {
@@ -136,6 +160,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var launchCount by mutableStateOf(0)
         private set
 
+    /** 全局通用弹窗状态 */
+    var globalDialogState by mutableStateOf<GlobalDialogData?>(null)
+        private set
+
+    fun showGlobalDialog(data: GlobalDialogData) {
+        globalDialogState = data
+    }
+
+    fun showFeedbackDialog(title: String, message: String, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+        showGlobalDialog(
+            GlobalDialogData(
+                title = title,
+                message = message,
+                confirmText = "确定",
+                icon = icon
+            )
+        )
+    }
+
+    fun dismissGlobalDialog() {
+        globalDialogState = null
+    }
+
     fun consumeDeepLink(): String? {
         val id = deepLinkHistoryId
         deepLinkHistoryId = null
@@ -159,6 +206,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     activeModeId = null
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            MainService.serviceError.collect { error ->
+                showGlobalDialog(
+                    GlobalDialogData(
+                        title = "服务异常",
+                        message = error,
+                        confirmText = "知道了",
+                        icon = androidx.compose.material.icons.Icons.Default.Warning
+                    )
+                )
             }
         }
 
@@ -206,20 +266,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             launchCount = repository.launchCountFlow.first()
             repository.incrementLaunchCount()
         }
+    }
 
-        // Shizuku 生命周期监听
-        Shizuku.addBinderReceivedListener {
-            isShizukuRunning = true
-            checkPermissions()
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        isShizukuRunning = true
+        checkPermissions()
+    }
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        isShizukuRunning = false
+        isShizukuPermissionGranted = false
+    }
+    private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
+        isShizukuPermissionGranted =
+            grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    fun registerShizukuListeners() {
+        Shizuku.addBinderReceivedListener(binderReceivedListener)
+        Shizuku.addBinderDeadListener(binderDeadListener)
+        Shizuku.addRequestPermissionResultListener(requestPermissionResultListener)
+        isShizukuRunning = Shizuku.pingBinder()
+        if (isShizukuRunning) {
+            isShizukuPermissionGranted = Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
-        Shizuku.addBinderDeadListener {
-            isShizukuRunning = false
-            isShizukuPermissionGranted = false
-        }
-        Shizuku.addRequestPermissionResultListener { _, grantResult ->
-            isShizukuPermissionGranted =
-                grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
+    }
+
+    fun unregisterShizukuListeners() {
+        Shizuku.removeBinderReceivedListener(binderReceivedListener)
+        Shizuku.removeBinderDeadListener(binderDeadListener)
+        Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
     }
 
     /**

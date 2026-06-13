@@ -86,6 +86,27 @@ class CropManager(private val context: Context) {
         windowManager.addView(composeView, layoutParams)
     }
 
+    /**
+     * 更新防截屏标志。
+     */
+    fun updateSecureFlag(enabled: Boolean) {
+        val currentFlags = layoutParams.flags
+        val newFlags = if (enabled) {
+            currentFlags or WindowManager.LayoutParams.FLAG_SECURE
+        } else {
+            currentFlags and WindowManager.LayoutParams.FLAG_SECURE.inv()
+        }
+
+        if (currentFlags != newFlags) {
+            layoutParams.flags = newFlags
+            composeView?.let {
+                if (it.parent != null) {
+                    windowManager.updateViewLayout(it, layoutParams)
+                }
+            }
+        }
+    }
+
     fun hide() {
         composeView?.let {
             if (it.parent != null) {

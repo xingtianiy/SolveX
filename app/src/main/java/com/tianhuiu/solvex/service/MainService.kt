@@ -42,7 +42,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -55,6 +57,9 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     companion object {
         private val _isRunning = MutableStateFlow(false)
         val isRunning = _isRunning.asStateFlow()
+
+        private val _serviceError = MutableSharedFlow<String>(replay = 0)
+        val serviceError = _serviceError.asSharedFlow()
 
         const val CHANNEL_ID = "main_service_channel"
         const val NOTIFICATION_ID = 1001
@@ -74,6 +79,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     private var currentHistoryId: String? = null
     private var processingJob: Job? = null
     private var captureEngine: ScreenCaptureEngine? = null
+    private var stealthJob: Job? = null
+    private var isStealthActive = false
     private lateinit var repository: SettingsRepository
     private lateinit var historyRepository: HistoryRepository
 
@@ -85,6 +92,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     override fun onCreate() {
         super.onCreate()
         _isRunning.value = true
+        // 立即检查一次状态，确保 UI 就绪通知实时刷新
+        (application as SolveXApplication).viewModel?.checkPermissions()
         savedStateRegistryController.performRestore(null)
         repository = SettingsRepository(this)
 
@@ -365,6 +374,9 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                     else -> "截图失败，请检查截屏权限设置"
                                 }
                                 android.util.Log.e("SolveX", "截图失败: $captureHint")
+                                lifecycle.coroutineScope.launch {
+                                    _serviceError.emit(captureHint)
+                                }
                                 updateStatus(BallStatus.ERROR)
                                 SystemUtils.vibrateError(this@MainService)
                                 drawerManager?.hide()
@@ -433,8 +445,79 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
             repository.appConfigFlow.collect { config ->
                 floatingBallManager?.enableAutoHide = config.permissions.enableAutoHideBall
                 floatingBallManager?.ballFullSizeDp = config.permissions.ballFullSizeDp
+                applyPrivacyPolicy(config)
             }
         }
+    }
+
+    private fun applyPrivacyPolicy(config: com.tianhuiu.solvex.data.models.AppConfig) {
+        val permissions = config.permissions
+
+        // 如果开启了隐匿模式，且 Shizuku 就绪，启动/恢复监听
+        if (permissions.enableStealthMode && 
+            rikka.shizuku.Shizuku.pingBinder() && 
+            rikka.shizuku.Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            startStealthMonitor()
+        } else {
+            stopStealthMonitor()
+            // 恢复为普通的防截屏设置
+            updateWindowsSecure(permissions.enableScreenProtection)
+            floatingBallManager?.updateStatus(BallStatus.IDLE)
+        }
+    }
+
+    private fun startStealthMonitor() {
+        if (stealthJob?.isActive == true) return
+        
+        // 检查 Shizuku 状态
+        if (!rikka.shizuku.Shizuku.pingBinder() || 
+            rikka.shizuku.Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            lifecycle.coroutineScope.launch {
+                _serviceError.emit("隐匿模式需要 Shizuku 授权，请在设置中开启")
+            }
+            return
+        }
+
+        stealthJob = lifecycle.coroutineScope.launch {
+            while (true) {
+                try {
+                    val svc = ShizukuUserServiceClient.acquire(this@MainService)
+                    if (svc != null) {
+                        val count = svc.getSecureWindowCount()
+                        val shouldBeSecure = count > 0
+                        if (isStealthActive != shouldBeSecure) {
+                            isStealthActive = shouldBeSecure
+                            val config = repository.appConfigFlow.first()
+                            // 隐匿模式下：如果有隐私窗口，强制开启保护；否则遵循用户基本设置
+                            val finalSecure = shouldBeSecure || config.permissions.enableScreenProtection
+                            updateWindowsSecure(finalSecure)
+
+                            // 视觉反馈：隐匿激活时变色或降低透明度
+                            if (shouldBeSecure) {
+                                floatingBallManager?.updateStatus(BallStatus.PROTECTED)
+                            } else {
+                                floatingBallManager?.updateStatus(BallStatus.IDLE)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("MainService", "Stealth monitor error", e)
+                }
+                delay(1000)
+            }
+        }
+    }
+
+    private fun stopStealthMonitor() {
+        stealthJob?.cancel()
+        stealthJob = null
+        isStealthActive = false
+    }
+
+    private fun updateWindowsSecure(enabled: Boolean) {
+        floatingBallManager?.updateSecureFlag(enabled)
+        drawerManager?.updateSecureFlag(enabled)
+        cropManager?.updateSecureFlag(enabled)
     }
 
     private fun switchEngine() {
@@ -452,6 +535,9 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
     override fun onDestroy() {
         _isRunning.value = false
+        // 停止时再次刷新，恢复“就绪”或“未就绪”状态
+        (application as SolveXApplication).viewModel?.checkPermissions()
+        stopStealthMonitor()
         captureEngine?.release()
         captureEngine = null
         floatingBallManager?.hide()
@@ -531,7 +617,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         // 根据截屏模式创建引擎
         captureEngine?.release()
         captureEngine = when (captureMode) {
-            CaptureMode.SHIZUKU -> ShizukuCaptureEngine()
+            CaptureMode.SHIZUKU -> ShizukuCaptureEngine(this)
             CaptureMode.ACCESSIBILITY -> AccessibilityCaptureEngine()
             else -> {
                 val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0

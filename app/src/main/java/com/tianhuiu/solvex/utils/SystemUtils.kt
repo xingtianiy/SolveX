@@ -55,6 +55,9 @@ object SystemUtils {
     }
 
     fun showToast(context: Context, message: String) {
+        // 对于普通提示，保留 Toast 是合理的，因为不会打断用户。
+        // 但为了响应用户“统一风格”的要求，如果是在 Activity 上下文中且消息重要，
+        // 建议在 ViewModel 中使用 State 控制显示 SolveXConfirmDialog。
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 

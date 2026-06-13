@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
@@ -475,11 +476,10 @@ fun ProviderEditScreen(
                         }
 
                         if (filled.isNotEmpty()) {
-                            com.tianhuiu.solvex.utils.SystemUtils.showFeedback(
-                                context,
-                                userMessage = "已填充默认模型",
-                                detailedLog = "填充内容: ${filled.joinToString(", ")}",
-                                priority = android.util.Log.INFO
+                            viewModel.showFeedbackDialog(
+                                title = "已填充默认模型",
+                                message = "填充内容: ${filled.joinToString(", ")}",
+                                icon = Icons.Default.CheckCircle
                             )
                         }
                     }

@@ -1,14 +1,14 @@
 {
-  "versionCode": 4,
-  "versionName": "0.0.4-alpha",
+  "versionCode": 5,
+  "versionName": "0.0.5-alpha",
   "releaseDate": "2026-06-13",
-  "level": "critical",
+  "level": "recommended",
   "apkSize": "18 MB",
   "updateLog": [
-    "修复历史记录进入详情页闪退的问题",
-    "全页面统一加载动画遮罩，提升加载体验",
-    "清理冗余代码和已弃用配置项，缩减应用体积"
+    "深度优化 Shizuku 绑定稳定性及自动重连机制",
+    "统一全应用弹窗视觉风格和完善无障碍模式授权引导流程",
+    "新增隐私保护，防截屏录屏与智能隐匿模式（实验阶段，未实测）"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.4-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.4-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.5-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.5-alpha/app-release.apk"
 }

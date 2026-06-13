@@ -18,12 +18,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -105,13 +107,16 @@ fun ImportExportSettingsScreen(
                 context.contentResolver.openOutputStream(it)?.use { outputStream ->
                     outputStream.write(exportContent.toByteArray())
                 }
-                SystemUtils.showToast(context, "配置已成功保存")
+                viewModel.showFeedbackDialog(
+                    title = "导出成功",
+                    message = "配置已成功保存到文件",
+                    icon = Icons.Default.CheckCircle
+                )
             } catch (e: Exception) {
-                SystemUtils.showFeedback(
-                    context,
-                    userMessage = "导出失败",
-                    detailedLog = "Export failed: ${e.message}",
-                    throwable = e
+                viewModel.showFeedbackDialog(
+                    title = "导出失败",
+                    message = e.message ?: "未知错误",
+                    icon = Icons.Default.Warning
                 )
             }
         }
@@ -306,9 +311,10 @@ fun ImportExportSettingsScreen(
                     onClick = {
                         pendingImportData?.let {
                             viewModel.importConfig(it)
-                            SystemUtils.showToast(
-                                context,
-                                "导入成功"
+                            viewModel.showFeedbackDialog(
+                                title = "导入成功",
+                                message = "配置已成功从文件导入",
+                                icon = Icons.Default.CheckCircle
                             )
                         }
                         showImportDialog = false

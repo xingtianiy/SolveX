@@ -174,6 +174,27 @@ class DrawerManager(
     }
 
     /**
+     * 更新防截屏标志。
+     */
+    fun updateSecureFlag(enabled: Boolean) {
+        val currentFlags = layoutParams.flags
+        val newFlags = if (enabled) {
+            currentFlags or WindowManager.LayoutParams.FLAG_SECURE
+        } else {
+            currentFlags and WindowManager.LayoutParams.FLAG_SECURE.inv()
+        }
+
+        if (currentFlags != newFlags) {
+            layoutParams.flags = newFlags
+            composeView?.let {
+                if (it.parent != null) {
+                    windowManager.updateViewLayout(it, layoutParams)
+                }
+            }
+        }
+    }
+
+    /**
      * 隐藏抽屉。
      */
     fun hide() {

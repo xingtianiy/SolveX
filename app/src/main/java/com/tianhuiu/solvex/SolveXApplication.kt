@@ -9,6 +9,11 @@ class SolveXApplication : Application() {
     internal lateinit var container: AppContainer
         private set
 
+    /**
+     * 全局持有 MainViewModel 引用，方便 Service 触发状态刷新。
+     */
+    var viewModel: com.tianhuiu.solvex.ui.MainViewModel? = null
+
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(applicationContext)
