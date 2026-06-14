@@ -31,6 +31,7 @@ import com.tianhuiu.solvex.ui.history.HistoryScreen
 import com.tianhuiu.solvex.ui.home.HomeScreen
 import com.tianhuiu.solvex.ui.settings.AboutScreen
 import com.tianhuiu.solvex.ui.settings.AssistantEditScreen
+import com.tianhuiu.solvex.ui.settings.AssistantSettingsScreen
 import com.tianhuiu.solvex.ui.settings.GeneralSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ImportExportSettingsScreen
 import com.tianhuiu.solvex.ui.settings.ModeSettingsScreen
@@ -136,7 +137,8 @@ fun SolveXApp(viewModel: MainViewModel) {
                 composable(Screen.Home.route) {
                     HomeScreen(
                         viewModel = viewModel,
-                        onNavigateToTutorial = { navController.navigate("settings/tutorial") }
+                        onNavigateToTutorial = { navController.navigate("settings/tutorial") },
+                        onNavigateToSettings = { navController.navigate("settings/assistants") }
                     )
                 }
                 composable(Screen.History.route) {
@@ -179,14 +181,20 @@ fun SolveXApp(viewModel: MainViewModel) {
                 composable("settings/models") {
                     ModelSettingsScreen(
                         viewModel = viewModel,
-                        onEditAssistant = { id ->
-                            val route =
-                                if (id != null) "settings/assistants/edit?id=$id" else "settings/assistants/edit"
-                            navController.navigate(route)
-                        },
                         onEditProvider = { id ->
                             val route =
                                 if (id != null) "settings/providers/edit?id=$id" else "settings/providers/edit"
+                            navController.navigate(route)
+                        },
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable("settings/assistants") {
+                    AssistantSettingsScreen(
+                        viewModel = viewModel,
+                        onEditAssistant = { id: String? ->
+                            val route =
+                                if (id != null) "settings/assistants/edit?id=$id" else "settings/assistants/edit"
                             navController.navigate(route)
                         },
                         onBack = { navController.popBackStack() }

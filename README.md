@@ -1,7 +1,7 @@
 # SolveX — 智能屏幕解析助手
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.5--alpha-orange)](version.json)
+[![Version](https://img.shields.io/badge/version-0.0.6--alpha-orange)](version.json)
 
 SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球交互、多引擎截屏、OCR
 文字识别和大语言模型流式响应，为用户提供即时的题目解答、内容分析和知识辅助。
@@ -11,7 +11,8 @@ SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球
 ### 悬浮交互系统
 
 - **全局悬浮球**：支持自由拖拽，通过单击触发解析、双击取消任务、长按切换 OCR/视觉引擎。
-- **实时抽屉**：侧边抽屉实时展示 AI 的解题思路、知识点和最终答案，支持跟随内容自动滚动。
+- **智能助手抽屉**：沉浸式底栏选择器，支持无限数量助手展示与快捷切换，适配单手操作。
+- **配置看板**：首页整合助手与引擎选择，核心配置一目了然。
 - **自适应隐藏**：截图前自动隐藏悬浮球，避免干扰识别，任务完成后自动恢复。
 
 ### 隐私与隐匿保护
@@ -28,7 +29,7 @@ SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球
 ### OCR 与 AI 调度
 
 - **多语种识别**：集成 Google ML Kit，支持中英文及复杂排版的高精度文字提取。
-- **流式 SSE 响应**：基于 OkHttp SSE 实现，答案逐字生成，告别漫长等待。
+- **长按拖拽排序**：助手及模型提供商支持长按排序，自由定制优先级。
 - **统一适配器**：内置 OpenAI、Anthropic、Google Gemini 适配器，完美兼容符合 OpenAI 接口协议的所有提供商。
 
 ### 工作模式与历史
@@ -41,9 +42,10 @@ SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球
 
 ### 1. 初次配置
 
-1. **添加 AI 提供方**：进入「设置 → 模型设置 → 提供方」，点击添加按钮，填写 API 地址和密钥。
+1. **添加 AI 提供方**：进入「设置 → 模型供应商」，点击添加按钮，填写 API 地址和密钥。
 2. **获取模型列表**：在提供方编辑页面点击「获取模型列表」，自动拉取可用模型并智能推荐默认模型。
-3. **选择助手**：在首页顶部助手选择器中，选择适合当前场景的助手身份。
+3. **管理助手**：进入「设置 → 助手管理」，创建、编辑或通过长按拖动调整助手优先级。
+4. **选择助手**：在首页配置看板点击助手名称，在底部抽屉中选择合适的助手。
 
 ### 2. 权限设置
 
@@ -106,9 +108,10 @@ SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球
   "versionCode": 1,
   "versionName": "0.0.1-alpha",
   "releaseDate": "2026-06-10",
-  "level": "critical",
+  "level": "recommended",
   "apkSize": "16 MB",
   "updateLog": [
+    "更新日志条目...",
     "更新日志条目..."
   ],
   "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.1-alpha/app-release.apk",

@@ -11,17 +11,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -33,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
@@ -89,7 +87,7 @@ fun PermissionSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("权限设置") },
+                title = { Text("权限设置", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -114,18 +112,11 @@ fun PermissionSettingsScreen(
                             Button(
                                 onClick = {
                                     val intent =
-                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                                putExtra(
-                                                    Settings.EXTRA_APP_PACKAGE,
-                                                    context.packageName
-                                                )
-                                            }
-                                        } else {
-                                            Intent("android.settings.APP_NOTIFICATION_SETTINGS").apply {
-                                                putExtra("app_package", context.packageName)
-                                                putExtra("app_uid", context.applicationInfo.uid)
-                                            }
+                                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                            putExtra(
+                                                Settings.EXTRA_APP_PACKAGE,
+                                                context.packageName
+                                            )
                                         }
                                     context.startActivity(intent)
                                 },
@@ -167,45 +158,20 @@ fun PermissionSettingsScreen(
                             }
                         }
                     )
-                }
-            }
-
-            item {
-                SettingsGroup(title = "稳定性权限") {
                     SettingsItem(
                         label = "电池优化",
-                        subLabel = if (isBatteryOptimized) "电池优化可能限制后台运行，导致服务被关闭" else "已允许后台运行",
+                        subLabel = if (isBatteryOptimized) "已开启电池优化" else "已允许后台运行",
                         icon = Icons.Default.BatterySaver,
                         trailing = {
-                            Icon(
-                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                        },
-                        onClick = {
-                            val intent =
-                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                            context.startActivity(intent)
-                        }
-                    )
-                    SettingsItem(
-                        label = "自启动",
-                        subLabel = "后台被关闭后自动启动应用",
-                        icon = Icons.Default.Refresh,
-                        trailing = {
-                            Icon(
-                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                        },
-                        onClick = {
-                            val intent =
-                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = "package:${context.packageName}".toUri()
-                                }
-                            context.startActivity(intent)
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                    context.startActivity(intent)
+                                },
+                                enabled = isBatteryOptimized
+                            ) {
+                                Text(if (isBatteryOptimized) "去关闭" else "已允许")
+                            }
                         }
                     )
                 }

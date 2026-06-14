@@ -7,7 +7,7 @@ import androidx.compose.material.icons.filled.School
 object StudyMode : Mode {
     override val id = "study"
     override val displayName = "常规模式"
-    override val description = "展示解题思路和答案片段"
+    override val description = "适合学习场景"
     override val icon = Icons.Default.School
     override val shouldCrop = true
     override val requiresAutomationAction = false

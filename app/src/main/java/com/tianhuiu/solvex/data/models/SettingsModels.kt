@@ -84,6 +84,7 @@ data class PermissionSettings(
     val ballFullSizeDp: Float = 42f,
     val enableScreenProtection: Boolean = false,
     val enableStealthMode: Boolean = false,
+    val isFirstLaunchSetupComplete: Boolean = false,
 )
 
 /**
@@ -100,6 +101,22 @@ object CaptureMode {
         SYSTEM -> "系统录屏"
         else -> mode ?: "未知"
     }
+}
+
+/**
+ * 权限引导步骤，按推荐顺序排列。
+ */
+enum class PermissionSetupStep(
+    val displayName: String,
+    val description: String,
+    val isOptional: Boolean = false,
+) {
+    OVERLAY("悬浮窗权限", "允许在其他应用上层显示悬浮球，是 SolveX 的核心交互方式"),
+    NOTIFICATION("通知权限", "解析完成后发送系统通知，避免错过结果", isOptional = true),
+    ACCESSIBILITY("无障碍服务", "辅助获取屏幕内容，仅无障碍截屏模式需要"),
+    BATTERY("电池优化白名单", "允许 SolveX 在后台持续运行，防止被系统省电策略关闭"),
+    SHIZUKU("Shizuku 授权", "ADB 级截屏权限，一次授权永久有效，无需反复弹窗确认"),
+    DONE("设置完成", "SolveX 已准备就绪，可以开始使用了"),
 }
 
 /**

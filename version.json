@@ -1,14 +1,13 @@
 {
-  "versionCode": 5,
-  "versionName": "0.0.5-alpha",
-  "releaseDate": "2026-06-13",
-  "level": "recommended",
+  "versionCode": 6,
+  "versionName": "0.0.6-alpha",
+  "releaseDate": "2026-06-14",
+  "level": "critical",
   "apkSize": "18 MB",
   "updateLog": [
-    "深度优化 Shizuku 绑定稳定性及自动重连机制",
-    "统一全应用弹窗视觉风格和完善无障碍模式授权引导流程",
-    "新增隐私保护，防截屏录屏与智能隐匿模式（实验阶段，未实测）"
+    "重构首页布局和设置页面，引入沉浸式底栏助手选择器",
+    "优化权限引导系统并且支持按需动态显示进度，统一视觉风格并简化配置项"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.5-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.5-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.6-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.6-alpha/app-release.apk"
 }

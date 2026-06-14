@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,12 +55,15 @@ fun TutorialScreen(onBack: () -> Unit) {
     )
 
     var currentPage by remember { mutableIntStateOf(0) }
+    var isRendered by remember { mutableStateOf(false) }
+
     val tutorialContent by produceState(initialValue = "", currentPage) {
+        isRendered = false
         value = withContext(Dispatchers.IO) {
             FileUtils.readAssetFile(context, tutorialFileNames[currentPage])
         }
     }
-    val isLoading = tutorialContent.isEmpty()
+    val isLoading = tutorialContent.isEmpty() || !isRendered
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -119,7 +123,7 @@ fun TutorialScreen(onBack: () -> Unit) {
             }
         }
     ) { padding ->
-            if (!isLoading) {
+        if (tutorialContent.isNotEmpty()) {
             MathView(
                 text = tutorialContent,
                 modifier = Modifier
@@ -127,7 +131,8 @@ fun TutorialScreen(onBack: () -> Unit) {
                     .padding(padding)
                     .padding(16.dp),
                 lineHeight = 2.0f,
-                forceMarkdown = true
+                forceMarkdown = true,
+                onRendered = { isRendered = true }
             )
         }
     }

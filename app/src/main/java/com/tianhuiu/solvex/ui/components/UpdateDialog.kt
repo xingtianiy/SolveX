@@ -108,24 +108,27 @@ fun UpdateDialog(
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (info.updateLevel == UpdateLevel.CRITICAL) {
-                                    InfoChip(
-                                        text = "重要更新",
-                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                        contentColor = MaterialTheme.colorScheme.error
-                                    )
-                                }
                             }
                         }
 
                         Spacer(Modifier.height(12.dp))
 
-                        Text(
-                            "v${info.versionName}",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "v${info.versionName}",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (info.updateLevel == UpdateLevel.CRITICAL) {
+                                Spacer(Modifier.width(12.dp))
+                                InfoChip(
+                                    text = "重要更新",
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
                     }
 
                     if (dismissible) {

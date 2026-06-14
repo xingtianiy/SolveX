@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,7 +19,8 @@ import kotlin.coroutines.resume
  */
 object ShizukuUserServiceClient {
     private const val TAG = "ShizukuClient"
-    private const val BIND_TIMEOUT_MS = 10000L
+    private const val BIND_TIMEOUT_MS = 8000L
+    private const val RETRY_DELAY_MS = 500L
 
     @Volatile
     private var service: IShizukuShellService? = null
@@ -40,25 +42,53 @@ object ShizukuUserServiceClient {
     }
 
     /**
-     * 获取 Shizuku 服务引用。首次调用时绑定，后续返回缓存。
-     * 超时返回 null。
+     * 获取 Shizuku 服务引用，失败时清理残留并重试一次。
      */
     suspend fun acquire(context: Context): IShizukuShellService? = mutex.withLock {
         val current = service
         if (current != null && current.asBinder().isBinderAlive) {
             return@withLock current
         }
-        
-        // 如果旧连接存在但已失效，先尝试彻底释放
-        Log.d(TAG, "Binder died or not present, attempting re-bind")
-        release(context)
+
+        // 清理本地失效引用
+        service = null
+        serviceConnection = null
 
         if (!Shizuku.pingBinder()) {
             Log.w(TAG, "Shizuku binder not alive")
             return@withLock null
         }
 
-        withTimeoutOrNull(BIND_TIMEOUT_MS) {
+        // 第一次尝试绑定
+        var result = tryBind(context)
+        if (result != null) {
+            return@withLock result
+        }
+
+        // 绑定失败，可能是进程重启后 Shizuku 服务端残留了旧 daemon 的失效记录
+        // 强制清理后重试
+        Log.w(TAG, "首次绑定失败，清理 Shizuku 残留状态后重试...")
+        try {
+            val args = getUserServiceArgs(context)
+            Shizuku.unbindUserService(args, null, true)
+        } catch (_: Exception) {
+        }
+        delay(RETRY_DELAY_MS)
+
+        result = tryBind(context)
+        if (result != null) {
+            Log.i(TAG, "重试绑定成功")
+        } else {
+            Log.e(TAG, "重试绑定仍然失败，请检查 Shizuku 是否正常运行")
+        }
+        return@withLock result
+    }
+
+    /**
+     * 单次绑定尝试，超时或失败返回 null。
+     */
+    private suspend fun tryBind(context: Context): IShizukuShellService? {
+        return withTimeoutOrNull(BIND_TIMEOUT_MS) {
             suspendCancellableCoroutine<IShizukuShellService?> { continuation ->
                 var resumed = false
                 val args = getUserServiceArgs(context)
@@ -67,11 +97,29 @@ object ShizukuUserServiceClient {
                         Log.d(TAG, "Shizuku service connected: ${name?.className}")
                         if (resumed) return
                         resumed = true
-                        
+
                         if (binder != null && binder.isBinderAlive) {
                             val s = IShizukuShellService.Stub.asInterface(binder)
                             service = s
                             serviceConnection = this
+                            try {
+                                binder.linkToDeath(
+                                    object : IBinder.DeathRecipient {
+                                        override fun binderDied() {
+                                            Log.d(TAG, "Binder died, invalidating cached service")
+                                            binder.unlinkToDeath(this, 0)
+                                            service = null
+                                            serviceConnection = null
+                                        }
+                                    },
+                                    0
+                                )
+                            } catch (_: Exception) {
+                                service = null
+                                serviceConnection = null
+                                continuation.resume(null)
+                                return
+                            }
                             continuation.resume(s)
                         } else {
                             continuation.resume(null)
@@ -80,7 +128,8 @@ object ShizukuUserServiceClient {
 
                     override fun onServiceDisconnected(name: ComponentName?) {
                         Log.d(TAG, "Shizuku service disconnected: ${name?.className}")
-                        // 这里不要立即设为 null，因为 Shizuku 可能会重连或者我们需要在 acquire 中处理
+                        service = null
+                        serviceConnection = null
                         if (!resumed) {
                             resumed = true
                             continuation.resume(null)
@@ -99,14 +148,20 @@ object ShizukuUserServiceClient {
                 }
 
                 continuation.invokeOnCancellation {
-                    resumed = true
+                    if (!resumed) {
+                        resumed = true
+                        try {
+                            Shizuku.unbindUserService(args, callback, true)
+                        } catch (_: Exception) {
+                        }
+                    }
                 }
             }
         }
     }
 
     /**
-     * 释放 Shizuku 服务连接。
+     * 释放活跃的 Shizuku 服务连接。
      */
     fun release(context: Context) {
         try {
@@ -114,10 +169,6 @@ object ShizukuUserServiceClient {
             if (conn != null) {
                 Log.d(TAG, "Unbinding Shizuku user service")
                 Shizuku.unbindUserService(getUserServiceArgs(context), conn, true)
-            } else {
-                // 即使没有活跃连接，也尝试通过参数强制解除，清理潜在的残留
-                Log.d(TAG, "Force unbinding potential stale service")
-                Shizuku.unbindUserService(getUserServiceArgs(context), null, true)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to unbind service", e)
@@ -132,5 +183,6 @@ object ShizukuUserServiceClient {
      */
     fun invalidate() {
         service = null
+        serviceConnection = null
     }
 }

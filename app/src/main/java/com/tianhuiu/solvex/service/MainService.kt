@@ -2,7 +2,6 @@ package com.tianhuiu.solvex.service
 
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
@@ -460,7 +459,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
             startStealthMonitor()
         } else {
             stopStealthMonitor()
-            // 恢复为普通的防截屏设置
+            // 恢复为普通地防截屏设置
             updateWindowsSecure(permissions.enableScreenProtection)
             floatingBallManager?.updateStatus(BallStatus.IDLE)
         }
@@ -468,9 +467,9 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
     private fun startStealthMonitor() {
         if (stealthJob?.isActive == true) return
-        
+
         // 检查 Shizuku 状态
-        if (!rikka.shizuku.Shizuku.pingBinder() || 
+        if (!rikka.shizuku.Shizuku.pingBinder() ||
             rikka.shizuku.Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             lifecycle.coroutineScope.launch {
                 _serviceError.emit("隐匿模式需要 Shizuku 授权，请在设置中开启")
@@ -479,9 +478,14 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         }
 
         stealthJob = lifecycle.coroutineScope.launch {
+            // 缓存服务引用，避免每秒重新绑定
+            var svc: IShizukuShellService? = null
             while (true) {
                 try {
-                    val svc = ShizukuUserServiceClient.acquire(this@MainService)
+                    // 仅在引用失效时重新获取
+                    if (svc == null || !svc.asBinder().isBinderAlive) {
+                        svc = ShizukuUserServiceClient.acquire(this@MainService)
+                    }
                     if (svc != null) {
                         val count = svc.getSecureWindowCount()
                         val shouldBeSecure = count > 0
@@ -500,6 +504,10 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                             }
                         }
                     }
+                } catch (_: android.os.DeadObjectException) {
+                    // binder 死亡，清除引用让下一轮重新获取
+                    android.util.Log.d("MainService", "Stealth monitor: binder died, will re-acquire")
+                    svc = null
                 } catch (e: Exception) {
                     android.util.Log.e("MainService", "Stealth monitor error", e)
                 }
@@ -589,8 +597,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     }
 
     /**
-     * 以前台服务形式启动。根据 EXTRA_CAPTURE_MODE 创建对应的截屏引擎，
-     * 并选择对应的前台服务类型（非 MediaProjection 模式不使用 mediaProjection 类型）。
+     * 以前台服务形式启动，根据截屏模式创建对应引擎。
      */
     private fun startAsForeground(intent: Intent?) {
         createNotificationChannel()
@@ -599,20 +606,16 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("SolveX 运行中")
-            .setContentText("随时准备解析屏幕内容")
+            .setContentText("AI 也会犯错，不要过度相信！")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val fgsType = when (captureMode) {
-                CaptureMode.SYSTEM -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                else -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            }
-            startForeground(NOTIFICATION_ID, notification, fgsType)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        val fgsType = when (captureMode) {
+            CaptureMode.SYSTEM -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            else -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         }
+        startForeground(NOTIFICATION_ID, notification, fgsType)
 
         // 根据截屏模式创建引擎
         captureEngine?.release()
@@ -636,16 +639,14 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = android.app.NotificationChannel(
-                CHANNEL_ID,
-                "后台核心服务",
-                android.app.NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "保持 SolveX 在后台运行以进行屏幕解析"
-            }
-            val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-            manager.createNotificationChannel(channel)
+        val channel = android.app.NotificationChannel(
+            CHANNEL_ID,
+            "后台核心服务",
+            android.app.NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "保持 SolveX 在后台运行以进行屏幕解析"
         }
+        val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        manager.createNotificationChannel(channel)
     }
 }

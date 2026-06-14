@@ -277,8 +277,8 @@ fun GeneralSettingsScreen(
                                     viewModel.updateBallSize(fullSizeDp = newValue)
                                 },
                                 valueRange = 24f..64f,
-                                steps = 0,
-                                modifier = Modifier.widthIn(max = 100.dp)
+                                steps = 19,
+                                modifier = Modifier.widthIn(max = 140.dp)
                             )
                         }
                     )

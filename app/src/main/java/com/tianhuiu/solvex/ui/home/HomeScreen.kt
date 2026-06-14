@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,27 +22,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -54,9 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,22 +64,24 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.data.models.EngineType
+import com.tianhuiu.solvex.data.models.PermissionSetupStep
 import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 
-/**
- * 首页屏幕。
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
-    onNavigateToTutorial: () -> Unit = {}
+    onNavigateToTutorial: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val lifecycleOwner = LocalLifecycleOwner.current
     val inAppNotifications by viewModel.inAppNotifications.collectAsState(initial = emptyList())
+
+    val sheetState = rememberModalBottomSheetState()
+    var showAssistantSheet by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -93,6 +93,15 @@ fun HomeScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+
+    if (showAssistantSheet) {
+        AssistantSelectionSheet(
+            viewModel = viewModel,
+            onDismissRequest = { showAssistantSheet = false },
+            onNavigateToSettings = onNavigateToSettings,
+            sheetState = sheetState
+        )
     }
 
     Scaffold(
@@ -107,14 +116,14 @@ fun HomeScreen(
                         )
                     )
                 },
+                windowInsets = WindowInsets(top = 0.dp),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = surfaceColor,
                     scrolledContainerColor = Color.Unspecified,
                     navigationIconContentColor = Color.Unspecified,
                     titleContentColor = Color.Unspecified,
                     actionIconContentColor = Color.Unspecified
-                ),
-                windowInsets = WindowInsets(top = 0.dp)
+                )
             )
         }
     ) { padding ->
@@ -147,29 +156,98 @@ fun HomeScreen(
         ) {
             item { Spacer(Modifier.height(4.dp)) }
 
-            // 助手选择器
-            item {
-                CompactAssistantBanner(viewModel)
-            }
-
-            // 首页通知展示区
+            // 1. 首页通知
             if (inAppNotifications.isNotEmpty()) {
                 item {
-                    NotificationStack(
+                    StatusBar(
                         notifications = inAppNotifications,
                         onDismiss = { viewModel.dismissInAppNotification(it) },
-                        onRequestOverlayPermission = { viewModel.requestOverlayPermission() },
-                        onRequestNotificationPermission = { viewModel.requestNotificationPermission() },
-                        onRequestAccessibilityPermission = { viewModel.requestAccessibilityPermission() },
-                        onRequestShizukuPermission = { viewModel.requestShizukuPermission() },
                         onNavigateToTutorial = onNavigateToTutorial
                     )
                 }
             }
 
-            // 引擎选择
+            // 2. 核心配置看板
             item {
-                SectionHeader("识别引擎", "决定如何理解屏幕内容")
+                ConfigurationBoard(
+                    viewModel = viewModel,
+                    onOpenAssistantSelection = { showAssistantSheet = true }
+                )
+            }
+
+            // 3. 操作区
+            item {
+                Spacer(Modifier.height(8.dp))
+                ActionSection(viewModel)
+                Spacer(Modifier.height(40.dp))
+            }
+        }
+    }
+}
+
+/**
+ * 核心配置看板：整合助手和引擎选择。
+ */
+@Composable
+fun ConfigurationBoard(
+    viewModel: MainViewModel,
+    onOpenAssistantSelection: () -> Unit
+) {
+    val selectedAssistant = viewModel.assistants.find { it.id == viewModel.selectedAssistantId }
+        ?: viewModel.assistants.firstOrNull()
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionHeader("核心配置", "调整分析方式和模型")
+
+        // 权限引导移动到此处
+        if (viewModel.showPermissionSetupGuide) {
+            PermissionSetupGuideCard(
+                viewModel = viewModel,
+                onAction = { viewModel.handleSetupStepAction(viewModel.currentSetupStep) },
+                onSkip = { viewModel.skipPermissionSetup() }
+            )
+        }
+
+        Surface(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                // 助手选择卡片
+                Surface(
+                    onClick = onOpenAssistantSelection,
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "当前助手",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                selectedAssistant?.name ?: "未选择助手",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // 引擎选择
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -188,139 +266,249 @@ fun HomeScreen(
                     )
                 }
             }
-
-            // 操作区
-            item {
-                Spacer(Modifier.height(8.dp))
-                ActionSection(viewModel)
-                Spacer(Modifier.height(40.dp))
-            }
         }
     }
 }
 
 /**
- * 首页通知栈：管理并展示多种类型的应用内通知（权限、就绪状态）。
+ * 助手选择底栏。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationStack(
-    notifications: List<com.tianhuiu.solvex.data.models.InAppNotification>,
-    onDismiss: (String) -> Unit,
-    onRequestOverlayPermission: () -> Unit,
-    onRequestNotificationPermission: () -> Unit,
-    onRequestAccessibilityPermission: () -> Unit,
-    onRequestShizukuPermission: () -> Unit,
-    onNavigateToTutorial: () -> Unit = {}
+fun AssistantSelectionSheet(
+    viewModel: MainViewModel,
+    onDismissRequest: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    sheetState: androidx.compose.material3.SheetState
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            Column(
+                modifier = Modifier.padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .width(32.dp)
+                        .height(4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(2.dp)
+                ) {}
+            }
+        }
     ) {
-        notifications.forEach { notification ->
-            NotificationCard(
-                notification = notification,
-                onDismiss = { onDismiss(notification.id) },
-                onAction = {
-                    if (notification.type == com.tianhuiu.solvex.data.models.NotificationType.PERMISSION) {
-                        when (notification.permissionType) {
-                            com.tianhuiu.solvex.data.models.PermissionType.OVERLAY -> onRequestOverlayPermission()
-                            com.tianhuiu.solvex.data.models.PermissionType.NOTIFICATION -> onRequestNotificationPermission()
-                            com.tianhuiu.solvex.data.models.PermissionType.ACCESSIBILITY -> onRequestAccessibilityPermission()
-                            com.tianhuiu.solvex.data.models.PermissionType.SHIZUKU -> onRequestShizukuPermission()
-                            else -> onRequestOverlayPermission()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "选择助手",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = {
+                    onDismissRequest()
+                    onNavigateToSettings()
+                }) {
+                    Icon(Icons.Default.Settings, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("管理")
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 400.dp)
+            ) {
+                items(viewModel.assistants.size) { index ->
+                    val assistant = viewModel.assistants[index]
+                    val isSelected = assistant.id == (viewModel.selectedAssistantId ?: viewModel.assistants.firstOrNull()?.id)
+
+                    Surface(
+                        onClick = {
+                            viewModel.setAssistant(assistant.id)
+                            onDismissRequest()
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(
+                            alpha = 0.3f
+                        )
+                        else Color.Transparent,
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        )
+                        else null
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    assistant.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                // 如果有模型信息可以显示
+                                Text(
+                                    "个性化智能助手",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = null // 已经通过 Surface 处理了
+                            )
                         }
-                    } else if (notification.type == com.tianhuiu.solvex.data.models.NotificationType.TUTORIAL) {
-                        onNavigateToTutorial()
                     }
                 }
-            )
+
+                if (viewModel.assistants.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.outlineVariant
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "暂无助手，请前往设置创建",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 /**
- * 通用通知卡片组件。
+ * 首页状态栏。
  */
 @Composable
-fun NotificationCard(
-    notification: com.tianhuiu.solvex.data.models.InAppNotification,
-    onDismiss: () -> Unit,
-    onAction: () -> Unit
+fun StatusBar(
+    notifications: List<com.tianhuiu.solvex.data.models.InAppNotification>,
+    onDismiss: (String) -> Unit,
+    onNavigateToTutorial: () -> Unit = {}
 ) {
-    val containerColor: Color
-    val contentColor: Color
-    val icon: ImageVector
-    val actionText: String?
+    val statusNotif =
+        notifications.find { it.type == com.tianhuiu.solvex.data.models.NotificationType.READY_STATUS }
+    val tutorialNotif =
+        notifications.find { it.type == com.tianhuiu.solvex.data.models.NotificationType.TUTORIAL }
 
-    when (notification.type) {
-        com.tianhuiu.solvex.data.models.NotificationType.PERMISSION -> {
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
-            contentColor = MaterialTheme.colorScheme.onErrorContainer
-            icon = Icons.Default.Warning
-            actionText = "去授权"
-        }
-
-        com.tianhuiu.solvex.data.models.NotificationType.READY_STATUS -> {
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            contentColor = MaterialTheme.colorScheme.onSurface
-            icon = Icons.Default.Info
-            actionText = null
-        }
-
-        com.tianhuiu.solvex.data.models.NotificationType.TUTORIAL -> {
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            icon = Icons.Default.AutoFixHigh
-            actionText = "查看教程"
-        }
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = containerColor,
-        border = androidx.compose.foundation.BorderStroke(1.dp, contentColor.copy(alpha = 0.2f))
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    notification.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = contentColor
-                )
-                Text(
-                    notification.content,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = contentColor.copy(alpha = 0.8f),
-                    maxLines = 3,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-            }
-            if (actionText != null) {
-                TextButton(
-                    onClick = onAction,
-                    colors = ButtonDefaults.textButtonColors(contentColor = contentColor)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 就绪/运行状态条
+        statusNotif?.let {
+            val isRunning = it.id == "STATUS_RUNNING"
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = if (isRunning)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                else
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(actionText, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
                     Icon(
-                        Icons.Default.Close,
-                        contentDescription = "关闭",
-                        tint = contentColor.copy(alpha = 0.5f),
+                        if (isRunning) Icons.Default.RocketLaunch else Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = if (isRunning) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            it.title,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            it.content,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = { onDismiss(it.id) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "关闭",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 新手指引条
+        tutorialNotif?.let {
+            Surface(
+                onClick = onNavigateToTutorial,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.AutoFixHigh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            it.title,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            it.content,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        "查看",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
             }
@@ -333,7 +521,7 @@ fun SectionHeader(title: String, subtitle: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 4.dp),
+            .padding(bottom = 6.dp),
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -344,93 +532,10 @@ fun SectionHeader(title: String, subtitle: String) {
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "· $subtitle",
+            text = subtitle,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CompactAssistantBanner(viewModel: MainViewModel) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedAssistant = viewModel.assistants.find { it.id == viewModel.selectedAssistantId }
-        ?: viewModel.assistants.firstOrNull()
-
-    var componentWidth by remember { mutableStateOf(0.dp) }
-    val density = LocalDensity.current
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Surface(
-            onClick = { expanded = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onSizeChanged {
-                    componentWidth = with(density) { it.width.toDp() }
-                },
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.AutoFixHigh,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "智能助手",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        selectedAssistant?.name ?: "未设置助手",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Icon(
-                    Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.width(componentWidth)
-        ) {
-            viewModel.assistants.forEach { assistant ->
-                DropdownMenuItem(
-                    text = { Text(assistant.name) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Face,
-                            null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    onClick = {
-                        viewModel.setAssistant(assistant.id)
-                        expanded = false
-                    }
-                )
-            }
-        }
     }
 }
 
@@ -523,8 +628,8 @@ fun ActionSection(viewModel: MainViewModel) {
     val disabledHint: String? = when {
         isStartEnabled || isRunning -> null
         !isOverlayEnabled -> "请先授予「显示在其他应用上层」权限"
-        captureMode == CaptureMode.ACCESSIBILITY && !isAccessibilityEnabled -> "请先在系统设置中开启「SolveX 无障碍服务」"
-        captureMode == CaptureMode.SHIZUKU && !isShizukuGranted -> "请先启动 Shizuku 并授权 SolveX"
+        captureMode == CaptureMode.ACCESSIBILITY -> "请先在系统设置中开启「SolveX 无障碍服务」"
+        true -> "请先启动 Shizuku 并授权 SolveX"
         else -> null
     }
 
@@ -643,6 +748,146 @@ fun ActionSection(viewModel: MainViewModel) {
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+/**
+ * 权限引导卡片：按顺序引导完成必要授权。
+ */
+@Composable
+fun PermissionSetupGuideCard(
+    viewModel: MainViewModel,
+    onAction: () -> Unit,
+    onSkip: () -> Unit
+) {
+    val currentStep = viewModel.currentSetupStep
+    val relevantSteps = viewModel.getRelevantSteps()
+    val totalSteps = relevantSteps.size
+    val stepIndex = if (currentStep == PermissionSetupStep.DONE) totalSteps else {
+        val index = relevantSteps.indexOf(currentStep)
+        if (index == -1) 1 else index + 1
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 进度指示
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (currentStep != PermissionSetupStep.DONE)
+                        "快速设置 ($stepIndex/$totalSteps)"
+                    else
+                        "快速设置",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (currentStep == PermissionSetupStep.DONE) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
+            if (currentStep != PermissionSetupStep.DONE) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        currentStep.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    if (currentStep.isOptional) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            Text(
+                                "可选",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        ) {
+                            Text(
+                                "必需",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    currentStep.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    if (currentStep.isOptional) {
+                        TextButton(onClick = onSkip) {
+                            Text("跳过")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Button(onClick = onAction) {
+                        Text(
+                            when (currentStep) {
+                                PermissionSetupStep.SHIZUKU -> "去授权"
+                                else -> "去设置"
+                            }
+                        )
+                    }
+                }
+            } else {
+                // 全部完成
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "设置完成",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "SolveX 已准备就绪，可以开始使用了",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
     }
 }

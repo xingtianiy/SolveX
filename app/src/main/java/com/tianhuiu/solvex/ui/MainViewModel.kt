@@ -2,7 +2,7 @@ package com.tianhuiu.solvex.ui
 
 import android.app.Application
 import android.content.Intent
-import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.getValue
@@ -21,6 +21,7 @@ import com.tianhuiu.solvex.data.models.DownloadStatus
 import com.tianhuiu.solvex.data.models.EngineType
 import com.tianhuiu.solvex.data.models.ModelProvider
 import com.tianhuiu.solvex.data.models.PermissionSettings
+import com.tianhuiu.solvex.data.models.PermissionSetupStep
 import com.tianhuiu.solvex.data.models.ProviderKind
 import com.tianhuiu.solvex.data.models.UpdateLevel
 import com.tianhuiu.solvex.data.models.VersionInfo
@@ -29,6 +30,7 @@ import com.tianhuiu.solvex.mode.ModeConfig
 import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.network.UnifiedLLMClient
 import com.tianhuiu.solvex.network.UpdateManager
+import com.tianhuiu.solvex.service.AdbCommandHelper
 import com.tianhuiu.solvex.service.MainService
 import com.tianhuiu.solvex.service.SolveXAccessibilityService
 import com.tianhuiu.solvex.utils.SystemUtils
@@ -147,6 +149,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isAccessibilityEnabled by mutableStateOf(false)
         private set
 
+    var showPermissionSetupGuide by mutableStateOf(false)
+        private set
+
+    var currentSetupStep by mutableStateOf(PermissionSetupStep.OVERLAY)
+        private set
+
     var deepLinkHistoryId by mutableStateOf<String?>(null)
 
     // 更新相关状态
@@ -243,6 +251,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // 自适应更新检测
         viewModelScope.launch {
+            // 启动时优先尝试从缓存恢复未完成的更新信息
+            repository.cachedVersionFlow.first()?.let { cachedJson ->
+                updateManager.parseCachedVersion(cachedJson)?.let { cachedInfo ->
+                    if (cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
+                        updateInfo = cachedInfo
+                    }
+                }
+            }
+
             val lastCheck = repository.lastUpdateCheckFlow.first()
             val consecutiveNoUpdate = repository.consecutiveNoUpdateFlow.first()
             val now = System.currentTimeMillis()
@@ -277,8 +294,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         isShizukuPermissionGranted = false
     }
     private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
-        isShizukuPermissionGranted =
-            grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val granted = grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED
+        isShizukuPermissionGranted = granted
+        if (granted) {
+            // Shizuku 授权成功后自动提权：授予 WRITE_SECURE_SETTINGS 并启用无障碍服务
+            viewModelScope.launch {
+                val ctx = getApplication<Application>()
+                AdbCommandHelper.grantWriteSecureSettings(ctx)
+                AdbCommandHelper.enableAccessibilityService(ctx)
+                // 延迟后刷新权限状态，确保 settings 命令生效
+                delay(500)
+                checkPermissions()
+            }
+        }
     }
 
     fun registerShizukuListeners() {
@@ -344,7 +372,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (manual) isCheckingUpdate = false
 
                     // NotModifiedException 表示版本未变化（304）
-                    if (error is com.tianhuiu.solvex.network.UpdateManager.NotModifiedException) {
+                    if (error is UpdateManager.NotModifiedException) {
                         repository.saveLastUpdateCheck(System.currentTimeMillis())
                         repository.saveConsecutiveNoUpdate(
                             (repository.consecutiveNoUpdateFlow.first()) + 1
@@ -400,7 +428,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun dismissUpdateDialog() {
-        if (!(updateInfo?.isDismissible == true)) return
+        if (updateInfo?.isDismissible != true) return
         // recommended 级别：推迟 24 小时后再提醒
         if (updateInfo?.updateLevel == UpdateLevel.RECOMMENDED) {
             viewModelScope.launch {
@@ -450,6 +478,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         save()
     }
 
+    fun updateProviders(newList: List<ModelProvider>) {
+        providers = newList
+        save()
+    }
+
     fun deleteProvider(id: String) {
         providers = providers.filter { it.id != id }
         save()
@@ -462,6 +495,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateAssistant(assistant: AssistantConfig) {
         assistants = assistants.map { if (it.id == assistant.id) assistant else it }
+        save()
+    }
+
+    fun updateAssistants(newList: List<AssistantConfig>) {
+        assistants = newList
         save()
     }
 
@@ -645,18 +683,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val notificationManager =
             (context as com.tianhuiu.solvex.SolveXApplication).container.appNotificationManager
-        // 同步所有通知状态（含无障碍状态）
+
+        // 判断当前截屏模式下是否已就绪（必需权限全部满足）
+        val mode = permissions.captureMode
+        val isReady = isOverlayPermissionGranted && when (mode) {
+            CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
+            CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
+            else -> true
+        }
+
         notificationManager.syncAll(
-            isOverlayGranted = isOverlayPermissionGranted,
-            isNotificationGranted = isNotificationPermissionGranted,
-            isAccessibilityEnabled = isAccessibilityEnabled,
-            isShizukuGranted = isShizukuPermissionGranted,
-            isShizukuInstalled = isShizukuInstalled,
-            isShizukuRunning = isShizukuRunning,
-            captureMode = permissions.captureMode,
             isServiceRunning = isServiceRunning,
+            isReady = isReady && !isServiceRunning,
             launchCount = launchCount,
         )
+
+        // 始终检查权限引导需求（根据截屏模式决定哪些权限是必需的）
+        checkAndStartPermissionSetup()
     }
 
     private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
@@ -680,16 +723,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun requestNotificationPermission() {
         val context = getApplication<Application>()
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val intent =
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                 putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             }
-        } else {
-            Intent("android.settings.APP_NOTIFICATION_SETTINGS").apply {
-                putExtra("app_package", context.packageName)
-                putExtra("app_uid", context.applicationInfo.uid)
-            }
-        }.apply {
+                .apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
@@ -768,11 +806,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             projectionData?.let { putExtra(MainService.EXTRA_PROJECTION_DATA, it) }
             putExtra(MainService.EXTRA_CAPTURE_MODE, permissions.captureMode)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
-        }
+        context.startForegroundService(intent)
         checkPermissions()
     }
 
@@ -821,6 +855,170 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
         permissions = PermissionSettings()
         save()
+    }
+
+    // ---- 权限引导 ----
+
+    fun getMissingSteps(): List<PermissionSetupStep> {
+        val context = getApplication<Application>()
+        val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+        val mode = permissions.captureMode
+
+        val missing = mutableListOf<PermissionSetupStep>()
+
+        if (!isOverlayPermissionGranted) missing.add(PermissionSetupStep.OVERLAY)
+        if (!isNotificationPermissionGranted) missing.add(PermissionSetupStep.NOTIFICATION)
+        if (mode == CaptureMode.ACCESSIBILITY && !isAccessibilityEnabled) missing.add(PermissionSetupStep.ACCESSIBILITY)
+        if (!pm.isIgnoringBatteryOptimizations(context.packageName)) missing.add(PermissionSetupStep.BATTERY)
+        if (mode == CaptureMode.SHIZUKU && (!isShizukuPermissionGranted || !isShizukuRunning)) missing.add(PermissionSetupStep.SHIZUKU)
+
+        return missing
+    }
+
+    fun getRelevantSteps(): List<PermissionSetupStep> {
+        val mode = permissions.captureMode
+        val relevant = mutableListOf<PermissionSetupStep>()
+
+        relevant.add(PermissionSetupStep.OVERLAY)
+        relevant.add(PermissionSetupStep.NOTIFICATION)
+        if (mode == CaptureMode.ACCESSIBILITY) relevant.add(PermissionSetupStep.ACCESSIBILITY)
+        relevant.add(PermissionSetupStep.BATTERY)
+        if (mode == CaptureMode.SHIZUKU) relevant.add(PermissionSetupStep.SHIZUKU)
+
+        return relevant
+    }
+
+    /**
+     * 检查权限并决定是否显示引导卡片。
+     */
+    fun checkAndStartPermissionSetup() {
+        val context = getApplication<Application>()
+        val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+        val mode = permissions.captureMode
+
+        // 检查当前截屏模式下是否所有必需权限均已满足
+        val requiredGranted = isOverlayPermissionGranted && when (mode) {
+            CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
+            CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
+            else -> true
+        }
+        val batteryOk = pm.isIgnoringBatteryOptimizations(context.packageName)
+
+        if (requiredGranted && batteryOk && isNotificationPermissionGranted) {
+            // 所有权限就绪，隐藏引导
+            showPermissionSetupGuide = false
+            if (!permissions.isFirstLaunchSetupComplete) {
+                updatePermissions(permissions.copy(isFirstLaunchSetupComplete = true))
+            }
+        } else {
+            // 存在缺失权限，显示引导并定位到第一个缺失项
+            showPermissionSetupGuide = true
+            advanceSetupToMissingStep()
+        }
+    }
+
+    /**
+     * 按优先级定位第一个缺失权限步骤。
+     */
+    fun advanceSetupToMissingStep() {
+        val context = getApplication<Application>()
+        val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+        val mode = permissions.captureMode
+
+        currentSetupStep = when {
+            // 必须：悬浮窗
+            !isOverlayPermissionGranted -> PermissionSetupStep.OVERLAY
+            // 可选：通知
+            !isNotificationPermissionGranted -> PermissionSetupStep.NOTIFICATION
+            // 仅 ACCESSIBILITY 模式
+            mode == CaptureMode.ACCESSIBILITY && !isAccessibilityEnabled -> PermissionSetupStep.ACCESSIBILITY
+            // 必须：电池优化
+            !pm.isIgnoringBatteryOptimizations(context.packageName) -> PermissionSetupStep.BATTERY
+            // 仅 SHIZUKU 模式
+            mode == CaptureMode.SHIZUKU && (!isShizukuPermissionGranted || !isShizukuRunning) -> PermissionSetupStep.SHIZUKU
+            else -> PermissionSetupStep.DONE
+        }
+
+        if (currentSetupStep == PermissionSetupStep.DONE) {
+            finishPermissionSetup()
+        }
+    }
+
+    /**
+     * 处理当前引导步骤的操作（跳转对应设置页）。
+     */
+    fun handleSetupStepAction(step: PermissionSetupStep) {
+        when (step) {
+            PermissionSetupStep.OVERLAY -> requestOverlayPermission()
+            PermissionSetupStep.NOTIFICATION -> requestNotificationPermission()
+            PermissionSetupStep.ACCESSIBILITY -> requestAccessibilityPermission()
+            PermissionSetupStep.BATTERY -> requestBatteryOptimizationPermission()
+            PermissionSetupStep.SHIZUKU -> {
+                when {
+                    !isShizukuInstalled -> {
+                        // 跳转 Shizuku 下载页
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            "https://github.com/RikkaApps/Shizuku/releases".toUri()
+                        ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                        getApplication<Application>().startActivity(intent)
+                    }
+                    !isShizukuRunning -> {
+                        // 引导用户启动 Shizuku
+                        showGlobalDialog(
+                            GlobalDialogData(
+                                title = "启动 Shizuku",
+                                message = "请在 Shizuku 应用中启动服务，然后返回 SolveX 继续授权。",
+                                confirmText = "打开 Shizuku",
+                                onConfirm = {
+                                    val ctx = getApplication<Application>()
+                                    val launchIntent = ctx.packageManager
+                                        .getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                        ?: ctx.packageManager
+                                            .getLaunchIntentForPackage("dev.rikka.shizuku")
+                                    launchIntent?.apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        ctx.startActivity(this)
+                                    }
+                                }
+                            )
+                        )
+                    }
+                    else -> requestShizukuPermission()
+                }
+            }
+            PermissionSetupStep.DONE -> finishPermissionSetup()
+        }
+    }
+
+    /**
+     * 跳转系统电池优化设置。
+     */
+    fun requestBatteryOptimizationPermission() {
+        val context = getApplication<Application>()
+        val intent =
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = "package:${context.packageName}".toUri()
+            }
+                .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        context.startActivity(intent)
+    }
+
+    /**
+     * 权限全部就绪时自动完成引导。
+     */
+    fun finishPermissionSetup() {
+        showPermissionSetupGuide = false
+        if (!permissions.isFirstLaunchSetupComplete) {
+            updatePermissions(permissions.copy(isFirstLaunchSetupComplete = true))
+        }
+    }
+
+    /**
+     * 手动关闭引导（下次 ON_RESUME 若权限仍缺失会重新显示）。
+     */
+    fun skipPermissionSetup() {
+        showPermissionSetupGuide = false
     }
 }
 

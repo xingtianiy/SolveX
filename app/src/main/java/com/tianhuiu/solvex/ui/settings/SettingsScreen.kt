@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Settings
@@ -63,10 +64,16 @@ fun SettingsScreen(navController: NavController) {
             item {
                 SettingsGroup(title = "模型配置") {
                     SettingsItem(
-                        label = "模型设置",
-                        subLabel = "配置模型提供方和助手提示词",
+                        label = "模型供应商",
+                        subLabel = "配置 LLM 模型提供方及 API 密钥",
                         icon = Icons.Default.SmartToy,
                         onClick = { navController.navigate("settings/models") }
+                    )
+                    SettingsItem(
+                        label = "助手管理",
+                        subLabel = "创建、编辑助手及调整展示排序",
+                        icon = Icons.Default.Face,
+                        onClick = { navController.navigate("settings/assistants") }
                     )
                 }
             }

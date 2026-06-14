@@ -7,7 +7,7 @@ import androidx.compose.material.icons.filled.AutoMode
 object QuickMode : Mode {
     override val id = "quick"
     override val displayName = "自动模式"
-    override val description = "悬浮球展示选择题答案/填空题自动复制"
+    override val description = "适合快速查询"
     override val icon = Icons.Default.AutoMode
     override val shouldCrop = false
     override val requiresAutomationAction = true

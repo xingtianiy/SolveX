@@ -3,7 +3,6 @@ package com.tianhuiu.solvex.capture
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import com.tianhuiu.solvex.service.ShizukuUserServiceClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -24,7 +23,7 @@ class ShizukuCaptureEngine(private val context: Context) : ScreenCaptureEngine {
     }
 
     override fun release() {
-        // 释放 Shizuku 服务绑定
-        ShizukuUserServiceClient.release(context)
+        // 不主动释放 Shizuku 用户服务绑定，daemon 进程可跨服务启停复用。
+        // 仅在 Shizuku binder 死亡时由 DeathRecipient 自动清理。
     }
 }
