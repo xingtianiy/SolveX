@@ -201,8 +201,6 @@ class ProcessingPipeline(
                     )
                 }
 
-                Log.d("ProcessingPipeline", "Extracted OCR Text:\n$extractedText")
-
                 // 检查是否提取到了有效内容
                 if (extractedText.isBlank()) {
                     summaryDeferred.await()

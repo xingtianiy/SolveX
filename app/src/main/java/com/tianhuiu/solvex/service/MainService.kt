@@ -49,7 +49,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * 后台核心服务。
+ * 协调应用生命周期、悬浮球控制与核心业务流的基础服务。
  */
 class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -146,9 +146,11 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 SystemUtils.vibrateSuccess(this@MainService)
                                 val config = repository.appConfigFlow.first()
 
-                                // 常规学习模式：弹出裁剪界面让用户选取重要区域
+                                // 根据模式和配置决定是否需要裁剪
                                 var image: android.graphics.Bitmap = bitmap
-                                if (ModeRegistry.get(config.selectedModeId).shouldCrop) {
+                                val mode = ModeRegistry.get(config.selectedModeId)
+                                val needCrop = config.currentModeConfig().enableCrop ?: mode.shouldCrop
+                                if (needCrop) {
                                     cropManager?.let { manager ->
                                         val cropped = manager.crop(image)
                                         if (cropped == null) {
@@ -611,10 +613,17 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
             .setOngoing(true)
             .build()
 
-        val fgsType = when (captureMode) {
-            CaptureMode.SYSTEM -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            else -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        // 统一声明所有可能的类型，确保在不同 Android 版本下的兼容性
+        var fgsType = 0
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // Android 10+ 必须根据实际用途声明类型
+            fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            if (captureMode == CaptureMode.SYSTEM) {
+                fgsType = fgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            }
         }
+
+        // Android 14 (API 34) 严格要求：必须在获取 MediaProjection 实例前启动前台服务
         startForeground(NOTIFICATION_ID, notification, fgsType)
 
         // 根据截屏模式创建引擎
@@ -624,12 +633,16 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
             CaptureMode.ACCESSIBILITY -> AccessibilityCaptureEngine()
             else -> {
                 val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-
                 @Suppress("DEPRECATION")
                 val data = intent?.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
+                
                 if (resultCode != 0 && data != null) {
-                    SystemCaptureEngine(this, resultCode, data).also {
-                        lifecycle.coroutineScope.launch { it.prepare() }
+                    SystemCaptureEngine(this, resultCode, data).also { engine ->
+                        // 在 Android 14 上，prepare 内部的 getMediaProjection 必须在 startForeground 之后
+                        lifecycle.coroutineScope.launch { 
+                            delay(100) // 给系统一点反应时间处理前台服务状态
+                            engine.prepare() 
+                        }
                     }
                 } else null
             }

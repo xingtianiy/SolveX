@@ -24,11 +24,14 @@
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Shizuku 绑定权限 -->
+    <uses-permission android:name="rikka.shizuku.permission.BIND_USER_SERVICE" />
     <!-- 忽略电池优化权限 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <queries>
         <package android:name="dev.rikka.shizuku" />
+        <package android:name="moe.shizuku.privileged.api" />
     </queries>
 
     <application
@@ -55,13 +58,6 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="shortService|mediaProjection|dataSync" />
-
-        <service
-            android:name=".service.ShizukuShellService"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="rikka.shizuku.permission.BIND_USER_SERVICE"
-            tools:ignore="Instantiatable" />
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

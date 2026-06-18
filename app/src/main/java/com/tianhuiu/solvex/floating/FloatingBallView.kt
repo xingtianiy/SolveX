@@ -5,7 +5,6 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -74,11 +73,6 @@ fun FloatingBallView(
         targetValue = baseWidth,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
         label = "width"
-    )
-
-    val alpha by animateFloatAsState(
-        targetValue = if (displayMode == BallDisplayMode.FULL) 1f else 0.4f,
-        label = "alpha"
     )
 
     val rotation: Float = if (status == BallStatus.RUNNING) {

@@ -1,11 +1,10 @@
 package com.tianhuiu.solvex.service
 
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
+import android.os.ParcelFileDescriptor
 import kotlin.system.exitProcess
 
 /**
- * Shizuku 用户服务：在 Shizuku 进程中执行 shell 命令。
+ * Shizuku 用户服务：在 Shizuku 进程中执行 shell 命令并支持大流传输。
  */
 class ShizukuShellService : IShizukuShellService.Stub() {
 
@@ -16,36 +15,52 @@ class ShizukuShellService : IShizukuShellService.Stub() {
             val process = ProcessBuilder(*command)
                 .redirectErrorStream(false)
                 .start()
-            val stdout = process.inputStream.use(::readAllBytes)
-            val stderr = process.errorStream.bufferedReader().use { it.readText() }
-            val exitCode = process.waitFor()
-            if (exitCode != 0) {
-                // 如果是截图命令失败，不抛出异常影响主进程，只记录日志
-                if (command.contains("screencap")) {
-                    android.util.Log.e("ShizukuService", "screencap failed: $stderr")
-                } else {
-                    throw RuntimeException(stderr.ifBlank { "命令执行失败，退出码=$exitCode" })
-                }
-            }
+            
+            val stdout = process.inputStream.readBytes()
             stdout
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
             byteArrayOf()
+        }
+    }
+
+    override fun execStream(command: Array<out String>?): ParcelFileDescriptor? {
+        if (command.isNullOrEmpty()) return null
+        return try {
+            val process = ProcessBuilder(*command).start()
+            val pipe = ParcelFileDescriptor.createPipe()
+            val readSide = pipe[0]
+            val writeSide = pipe[1]
+
+            // 在后台线程将进程输出写入管道
+            Thread {
+                try {
+                    process.inputStream.use { input ->
+                        ParcelFileDescriptor.AutoCloseOutputStream(writeSide).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    process.waitFor()
+                } catch (e: Exception) {
+                }
+            }.start()
+
+            readSide
+        } catch (_: Exception) {
+            null
         }
     }
 
     override fun getSecureWindowCount(): Int {
         return try {
             val process = Runtime.getRuntime().exec("dumpsys window windows")
-            val reader = process.inputStream.bufferedReader()
             var count = 0
-            reader.useLines { lines ->
+            process.inputStream.bufferedReader().useLines { lines ->
                 lines.forEach { line ->
-                    // 匹配包含 FLAG_SECURE 的窗口行
-                    // dumpsys 输出中通常包含 mHasSurface=true 且 flags 包含 0x00002000 (FLAG_SECURE)
-                    // 或者直接有文本标识
-                    if (line.contains("FLAG_SECURE") || line.contains("flags=0x") && hasSecureFlag(line)) {
-                        // 排除自身窗口（如果需要，但通常检测外部窗口即可）
+                    val isSecure = line.contains("FLAG_SECURE") ||
+                                 (line.contains("flags=0x") && hasSecureFlag(line)) ||
+                                 (line.contains("mIsWallpaper=false") && line.contains("secure=true"))
+                    
+                    if (isSecure) {
                         if (!line.contains("com.tianhuiu.solvex")) {
                             count++
                         }
@@ -76,16 +91,5 @@ class ShizukuShellService : IShizukuShellService.Stub() {
 
     override fun destroy() {
         exitProcess(0)
-    }
-
-    private fun readAllBytes(inputStream: InputStream): ByteArray {
-        val output = ByteArrayOutputStream()
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        while (true) {
-            val count = inputStream.read(buffer)
-            if (count <= 0) break
-            output.write(buffer, 0, count)
-        }
-        return output.toByteArray()
     }
 }

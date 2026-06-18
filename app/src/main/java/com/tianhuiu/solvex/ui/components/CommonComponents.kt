@@ -148,7 +148,7 @@ fun SolveXConfirmDialog(
     title: String,
     message: String,
     confirmText: String = "确认",
-    dismissText: String = "取消",
+    dismissText: String? = "取消",
     isDestructive: Boolean = false,
     icon: ImageVector? = null,
 ) {
@@ -165,11 +165,13 @@ fun SolveXConfirmDialog(
                 Text(confirmText, fontWeight = FontWeight.Bold)
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(dismissText)
+        dismissButton = if (dismissText != null) {
+            {
+                TextButton(onClick = onDismissRequest) {
+                    Text(dismissText)
+                }
             }
-        }
+        } else null
     ) {
         Text(
             text = message,

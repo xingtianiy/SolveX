@@ -1,13 +1,13 @@
 {
-  "versionCode": 6,
-  "versionName": "0.0.6-alpha",
-  "releaseDate": "2026-06-14",
+  "versionCode": 7,
+  "versionName": "0.0.7-alpha",
+  "releaseDate": "2026-06-18",
   "level": "critical",
   "apkSize": "18 MB",
   "updateLog": [
-    "重构首页布局和设置页面，引入沉浸式底栏助手选择器",
-    "优化权限引导系统并且支持按需动态显示进度，统一视觉风格并简化配置项"
+    "修复 Shizuku 授权生命周期与绑定超时问题",
+    "修复 ADB 提权命令未执行导致 WRITE_SETTINGS 和无障碍服务未启用的问题"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.6-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.6-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.7-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.7-alpha/app-release.apk"
 }

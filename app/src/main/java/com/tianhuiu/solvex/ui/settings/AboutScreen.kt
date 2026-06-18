@@ -52,12 +52,16 @@ import com.tianhuiu.solvex.ui.components.SolveXDialog
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(viewModel: com.tianhuiu.solvex.ui.MainViewModel, onBack: () -> Unit) {
+fun AboutScreen(
+    viewModel: com.tianhuiu.solvex.ui.MainViewModel,
+    updateViewModel: com.tianhuiu.solvex.ui.UpdateViewModel,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     var detailDialogContent by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var showSourceDialog by remember { mutableStateOf(false) }
-    val isChecking by remember { androidx.compose.runtime.derivedStateOf { viewModel.isCheckingUpdate } }
+    val isChecking by remember { androidx.compose.runtime.derivedStateOf { updateViewModel.isCheckingUpdate } }
 
     Scaffold(
         topBar = {
@@ -108,7 +112,7 @@ fun AboutScreen(viewModel: com.tianhuiu.solvex.ui.MainViewModel, onBack: () -> U
                     showArrow = true,
                     onClick = {
                         if (!isChecking) {
-                            viewModel.checkForUpdates(manual = true)
+                            updateViewModel.checkForUpdates(manual = true)
                         }
                     }
                 )

@@ -1,40 +1,28 @@
 package com.tianhuiu.solvex.capture
 
-import android.os.DeadObjectException
-import android.util.Log
+import com.tianhuiu.solvex.service.ShizukuProcessHelper
 import com.tianhuiu.solvex.service.ShizukuUserServiceClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-/**
- * Shizuku shell 截屏工具：通过 `screencap -p` 获取 PNG 字节。
- */
 object ShizukuShellScreencap {
+    suspend fun capturePng(context: android.content.Context): ByteArray? =
+        withContext(Dispatchers.IO) {
+            val result = ShizukuProcessHelper.execRaw(arrayOf("screencap", "-p"))
+            if (result != null) {
+                return@withContext result
+            }
+            val svc = ShizukuUserServiceClient.acquire(context) ?: run {
+                return@withContext null
+            }
+            return@withContext try {
+                val pfd = svc.execStream(arrayOf("screencap", "-p")) ?: return@withContext null
 
-    suspend fun capturePng(context: android.content.Context): ByteArray? {
-        // 尝试获取服务
-        var svc = ShizukuUserServiceClient.acquire(context) ?: return null
-        
-        return try {
-            executeCapture(svc)
-        } catch (e: DeadObjectException) {
-            Log.w("ShizukuScreencap", "Shizuku service died, retrying once...")
-            // 如果是因为 Binder 死亡，尝试重新获取一次
-            ShizukuUserServiceClient.invalidate()
-            svc = ShizukuUserServiceClient.acquire(context) ?: return null
-            try {
-                executeCapture(svc)
-            } catch (e2: Exception) {
-                Log.e("ShizukuScreencap", "Retry capture failed", e2)
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd).use { input ->
+                    input.readBytes()
+                }
+            } catch (e: Exception) {
                 null
             }
-        } catch (e: Exception) {
-            Log.e("ShizukuScreencap", "screencap failed", e)
-            null
         }
-    }
-    
-    private fun executeCapture(svc: com.tianhuiu.solvex.service.IShizukuShellService): ByteArray {
-        val result = svc.exec(arrayOf("sh", "-c", "screencap -p"))
-        Log.d("ShizukuScreencap", "Captured ${result.size} bytes")
-        return result
-    }
 }

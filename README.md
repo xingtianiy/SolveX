@@ -1,10 +1,9 @@
 # SolveX — 智能屏幕解析助手
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.6--alpha-orange)](version.json)
+[![Version](https://img.shields.io/badge/version-0.0.7--alpha-orange)](version.json)
 
-SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球交互、多引擎截屏、OCR
-文字识别和大语言模型流式响应，为用户提供即时的题目解答、内容分析和知识辅助。
+SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球交互、多引擎截屏、大语言模型流式响应，为用户提供即时的题目解答、内容分析和知识辅助。
 
 ## 🔥 核心功能
 
@@ -139,12 +138,14 @@ app/src/main/java/com/tianhuiu/solvex/
 ├── capture/             # 截屏引擎实现 (System / Shizuku / Accessibility)
 ├── floating/            # 悬浮交互层 (悬浮球、实时抽屉、屏幕裁剪系统)
 ├── mode/                # 业务模式层 (常规解析与自动全屏模式逻辑)
-├── network/             # 网络与 AI 层 (LLM 适配器、SSE 客户端、OCR 流水线)
+├── network/             # 网络与 AI 层 (LLM 适配器、SSE 客户端、流水线)
+├── service/             # 后台服务 (MainService、Shizuku 辅助、无障碍服务)
 ├── ui/                  # 界面表现层 (基于 Jetpack Compose)
-│   ├── home/            # 首页控制中心
+│   ├── home/            # 首页控制中心（独立通知栏组件）
 │   ├── history/         # 历史记录列表与多维详情展示
 │   └── settings/        # 系统配置、模型管理与关于页面
-└── data/                # 数据持久化 (Room 数据库、DataStore 偏好设置)
+├── data/                # 数据持久化 (Room 数据库、DataStore 偏好设置)
+└── utils/               # 工具类 (文件、通知、日期、自动化工具)
 ```
 
 ## 🛠️ 技术栈和依赖

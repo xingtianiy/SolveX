@@ -54,7 +54,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
  * 应用主入口及路由配置。
  */
 @Composable
-fun SolveXApp(viewModel: MainViewModel) {
+fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
     val navController = rememberNavController()
     val items = listOf(
         Screen.Home,
@@ -68,12 +68,12 @@ fun SolveXApp(viewModel: MainViewModel) {
         val showBottomBar = items.any { it.route == currentDestination?.route }
 
         // 软件更新弹窗
-        viewModel.updateInfo?.let { info ->
+        updateViewModel.updateInfo?.let { info ->
             UpdateDialog(
                 info = info,
-                downloadStatus = viewModel.downloadStatus,
-                onDismiss = { viewModel.dismissUpdateDialog() },
-                onUpdate = { viewModel.startUpdate() }
+                downloadStatus = updateViewModel.downloadStatus,
+                onDismiss = { updateViewModel.dismissUpdateDialog() },
+                onUpdate = { updateViewModel.startUpdate() }
             )
         }
 
@@ -91,7 +91,7 @@ fun SolveXApp(viewModel: MainViewModel) {
                 title = data.title,
                 message = data.message,
                 confirmText = data.confirmText,
-                dismissText = data.dismissText ?: "取消",
+                dismissText = data.dismissText,
                 isDestructive = data.isDestructive,
                 icon = data.icon
             )
@@ -245,6 +245,7 @@ fun SolveXApp(viewModel: MainViewModel) {
                 composable("settings/about") {
                     AboutScreen(
                         viewModel = viewModel,
+                        updateViewModel = updateViewModel,
                         onBack = { navController.popBackStack() }
                     )
                 }

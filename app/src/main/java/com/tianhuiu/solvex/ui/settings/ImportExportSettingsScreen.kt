@@ -78,12 +78,12 @@ fun ImportExportSettingsScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     var pendingImportData by remember { mutableStateOf<com.tianhuiu.solvex.ui.ExportData?>(null) }
 
-    // Selection state
+    // 选择状态
     val selectedProviders = remember { mutableStateMapOf<String, Boolean>() }
     val includeApiKeyMap = remember { mutableStateMapOf<String, Boolean>() }
     val selectedAssistants = remember { mutableStateMapOf<String, Boolean>() }
 
-    // Initialize selection state
+    // 初始化选择状态
     LaunchedEffect(viewModel.providers, viewModel.assistants) {
         viewModel.providers.forEach {
             if (it.id !in selectedProviders) selectedProviders[it.id] = true
@@ -94,7 +94,7 @@ fun ImportExportSettingsScreen(
         }
     }
 
-    // Master Checkbox Logic
+    // 全选逻辑
     val allProvidersSelected =
         viewModel.providers.isNotEmpty() && viewModel.providers.all { selectedProviders[it.id] == true }
     val allAssistantsSelected =

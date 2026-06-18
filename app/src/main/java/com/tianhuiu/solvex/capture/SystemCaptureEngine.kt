@@ -17,11 +17,12 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * MediaProjection 截屏引擎：通过系统屏幕录制 API 获取屏幕内容。
+ * 封装 MediaProjection 录屏接口的引擎实现。
  */
 class SystemCaptureEngine(
     private val context: Context,
@@ -38,12 +39,10 @@ class SystemCaptureEngine(
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
-            Log.d("SystemCapture", "MediaProjection stopped")
             release()
         }
 
         override fun onCapturedContentResize(width: Int, height: Int) {
-            Log.d("SystemCapture", "Resized to ${width}x$height")
             this@SystemCaptureEngine.width = width
             this@SystemCaptureEngine.height = height
             mainHandler.post { recreateVirtualDisplay() }
@@ -89,8 +88,6 @@ class SystemCaptureEngine(
     private fun recreateVirtualDisplay() {
         val projection = mediaProjection ?: return
         if (width == 0 || height == 0) updateDisplayMetrics()
-        Log.d("SystemCapture", "Creating virtual display: ${width}x${height}")
-
         imageReader?.close()
         imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
 
@@ -103,7 +100,7 @@ class SystemCaptureEngine(
                 imageReader!!.surface, null, null
             )
         } else {
-            current.setSurface(imageReader!!.surface)
+            current.surface = imageReader!!.surface
             current.resize(width, height, density)
         }
     }
@@ -111,7 +108,7 @@ class SystemCaptureEngine(
     override suspend fun capture(): Bitmap? = withContext(Dispatchers.IO) {
         withContext(Dispatchers.Main) {
             prepareProjection()
-            val oldW = width;
+            val oldW = width
             val oldH = height
             updateDisplayMetrics()
             if (oldW != width || oldH != height) recreateVirtualDisplay()
@@ -119,14 +116,19 @@ class SystemCaptureEngine(
 
         val reader = imageReader ?: return@withContext null
 
-        val image = withTimeoutOrNull(200L) {
-            withContext(Dispatchers.IO) {
-                reader.acquireNextImage()
+        // Android 14+ 某些设备 acquireNextImage 可能会较慢或需要 acquireLatestImage
+        val image = withTimeoutOrNull(500L) {
+            var img = reader.acquireLatestImage()
+            // 如果最新帧不可用，尝试等待下一帧
+            if (img == null) {
+                delay(50)
+                img = reader.acquireNextImage()
             }
+            img
         }
 
         if (image == null) {
-            Log.e("SystemCapture", "Failed to acquire image")
+            Log.e("SystemCapture", "Failed to acquire image after timeout")
             return@withContext null
         }
 
@@ -138,7 +140,7 @@ class SystemCaptureEngine(
 
         val bitmap = createBitmap(image.width + (rowPadding / pixelStride), image.height)
         bitmap.copyPixelsFromBuffer(buffer)
-        val fw = image.width;
+        val fw = image.width
         val fh = image.height
         image.close()
 
@@ -150,7 +152,6 @@ class SystemCaptureEngine(
     }
 
     override fun release() {
-        Log.d("SystemCapture", "Releasing")
         imageReader?.close(); imageReader = null
         virtualDisplay?.release(); virtualDisplay = null
         mediaProjection?.unregisterCallback(projectionCallback)

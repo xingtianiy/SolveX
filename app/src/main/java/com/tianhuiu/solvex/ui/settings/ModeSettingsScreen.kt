@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewSidebar
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.TextFields
@@ -169,6 +170,19 @@ fun ModeSettingsScreen(
                                 checked = config.autoOpenDrawer,
                                 onCheckedChange = {
                                     viewModel.updateModeConfig(config.copy(autoOpenDrawer = it))
+                                }
+                            )
+                        }
+                    )
+                    SettingsItem(
+                        label = "启用截图裁剪",
+                        subLabel = if (config.enableCrop == true) "截图后手动框选目标区域" else "截图后直接全屏解析",
+                        icon = Icons.Default.Crop,
+                        trailing = {
+                            Switch(
+                                checked = config.enableCrop ?: mode.shouldCrop,
+                                onCheckedChange = { enabled ->
+                                    viewModel.updateModeConfig(config.copy(enableCrop = enabled))
                                 }
                             )
                         }

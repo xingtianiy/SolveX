@@ -12,24 +12,19 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.tianhuiu.solvex.BuildConfig
 import com.tianhuiu.solvex.data.SettingsRepository
 import com.tianhuiu.solvex.data.models.AppConfig
 import com.tianhuiu.solvex.data.models.AssistantConfig
 import com.tianhuiu.solvex.data.models.CaptureMode
-import com.tianhuiu.solvex.data.models.DownloadStatus
 import com.tianhuiu.solvex.data.models.EngineType
 import com.tianhuiu.solvex.data.models.ModelProvider
 import com.tianhuiu.solvex.data.models.PermissionSettings
 import com.tianhuiu.solvex.data.models.PermissionSetupStep
 import com.tianhuiu.solvex.data.models.ProviderKind
-import com.tianhuiu.solvex.data.models.UpdateLevel
-import com.tianhuiu.solvex.data.models.VersionInfo
 import com.tianhuiu.solvex.data.models.currentModeConfig
 import com.tianhuiu.solvex.mode.ModeConfig
 import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.network.UnifiedLLMClient
-import com.tianhuiu.solvex.network.UpdateManager
 import com.tianhuiu.solvex.service.AdbCommandHelper
 import com.tianhuiu.solvex.service.MainService
 import com.tianhuiu.solvex.service.SolveXAccessibilityService
@@ -44,10 +39,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import rikka.shizuku.Shizuku
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 /**
- * 应用全局 ViewModel：管理配置、权限状态及核心服务逻辑。
+ * 应用全局数据导出结构。
  */
 @Serializable
 data class ExportData(
@@ -90,7 +84,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prettyPrint = true
     }
     private val llmClient = UnifiedLLMClient(client, json)
-    private val updateManager = UpdateManager(application, client, json)
 
     private var pendingSaveJob: kotlinx.coroutines.Job? = null
 
@@ -156,14 +149,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var deepLinkHistoryId by mutableStateOf<String?>(null)
-
-    // 更新相关状态
-    var updateInfo by mutableStateOf<VersionInfo?>(null)
-        private set
-    var downloadStatus by mutableStateOf<DownloadStatus>(DownloadStatus.Idle)
-        private set
-    var isCheckingUpdate by mutableStateOf(false)
-        private set
 
     var launchCount by mutableStateOf(0)
         private set
@@ -249,35 +234,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 自适应更新检测
-        viewModelScope.launch {
-            // 启动时优先尝试从缓存恢复未完成的更新信息
-            repository.cachedVersionFlow.first()?.let { cachedJson ->
-                updateManager.parseCachedVersion(cachedJson)?.let { cachedInfo ->
-                    if (cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
-                        updateInfo = cachedInfo
-                    }
-                }
-            }
-
-            val lastCheck = repository.lastUpdateCheckFlow.first()
-            val consecutiveNoUpdate = repository.consecutiveNoUpdateFlow.first()
-            val now = System.currentTimeMillis()
-            val isCriticalPending = updateInfo?.updateLevel == UpdateLevel.CRITICAL
-
-            // 强制更新：每次启动都必须检查，直到更新完成
-            val intervalDays = when {
-                isCriticalPending -> 0L
-                consecutiveNoUpdate >= 3 -> 14L
-                updateInfo != null -> 1L
-                else -> 7L
-            }
-
-            if (now - lastCheck > TimeUnit.DAYS.toMillis(intervalDays)) {
-                checkForUpdates(manual = false)
-            }
-        }
-
         // 启动计数
         viewModelScope.launch {
             launchCount = repository.launchCountFlow.first()
@@ -310,6 +266,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun registerShizukuListeners() {
+        // 先移除再添加，防止 Activity 重建导致的重复注册
+        Shizuku.removeBinderReceivedListener(binderReceivedListener)
+        Shizuku.removeBinderDeadListener(binderDeadListener)
+        Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
         Shizuku.addBinderReceivedListener(binderReceivedListener)
         Shizuku.addBinderDeadListener(binderDeadListener)
         Shizuku.addRequestPermissionResultListener(requestPermissionResultListener)
@@ -325,119 +285,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
     }
 
-    /**
-     * 检测更新：竞速请求 + ETag 条件请求 + 本地缓存兜底。
-     */
-    fun checkForUpdates(manual: Boolean = false) {
-        viewModelScope.launch {
-            if (manual) isCheckingUpdate = true
-
-            // 强制更新允许重复检测，确保每次启动都检查
-            if (!manual && updateInfo?.updateLevel == UpdateLevel.CRITICAL) {
-                // 继续检查，不跳过
-            }
-
-            val savedEtag = repository.updateEtagFlow.first()
-
-            updateManager.checkUpdate(etag = savedEtag)
-                .onSuccess { (info, newEtag) ->
-                    if (manual) isCheckingUpdate = false
-                    repository.saveLastUpdateCheck(System.currentTimeMillis())
-
-                    // 保存新 ETag
-                    if (newEtag != null) {
-                        repository.saveUpdateEtag(newEtag)
-                    }
-
-                    // 缓存版本信息
-                    repository.saveCachedVersion(updateManager.encodeVersion(info))
-
-                    // 比较 versionCode
-                    if (info.versionCode > BuildConfig.VERSION_CODE) {
-                        updateInfo = info
-                        repository.saveConsecutiveNoUpdate(0)
-                    } else {
-                        repository.saveConsecutiveNoUpdate(
-                            (repository.consecutiveNoUpdateFlow.first()) + 1
-                        )
-                        if (manual) {
-                            SystemUtils.showToast(
-                                getApplication(),
-                                "当前已是最新版本"
-                            )
-                        }
-                    }
-                }
-                .onFailure { error ->
-                    if (manual) isCheckingUpdate = false
-
-                    // NotModifiedException 表示版本未变化（304）
-                    if (error is UpdateManager.NotModifiedException) {
-                        repository.saveLastUpdateCheck(System.currentTimeMillis())
-                        repository.saveConsecutiveNoUpdate(
-                            (repository.consecutiveNoUpdateFlow.first()) + 1
-                        )
-                        if (manual) {
-                            SystemUtils.showToast(
-                                getApplication(),
-                                "当前已是最新版本"
-                            )
-                        }
-                        return@launch
-                    }
-
-                    // 网络失败时尝试使用缓存版本
-                    if (manual) {
-                        val cachedJson = repository.cachedVersionFlow.first()
-                        if (cachedJson != null) {
-                            val cachedInfo = updateManager.parseCachedVersion(cachedJson)
-                            if (cachedInfo != null && cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
-                                updateInfo = cachedInfo
-                                SystemUtils.showToast(
-                                    getApplication(),
-                                    "网络不可用，显示上次缓存的更新信息"
-                                )
-                                return@launch
-                            }
-                        }
-
-                        val message = error.message ?: "未知错误"
-                        SystemUtils.showFeedback(
-                            getApplication(),
-                            userMessage = "检查更新失败",
-                            detailedLog = "Update check failed: $message"
-                        )
-                    }
-                }
-        }
-    }
-
-    /**
-     * 开始下载并安装 APK。
-     */
-    fun startUpdate() {
-        val info = updateInfo ?: return
-        viewModelScope.launch {
-            updateManager.downloadApk(info.githubUrl, info.giteeUrl).collect { status ->
-                downloadStatus = status
-                if (status is DownloadStatus.Success) {
-                    updateManager.installApk(status.apkPath)
-                }
-            }
-        }
-    }
-
-    fun dismissUpdateDialog() {
-        if (updateInfo?.isDismissible != true) return
-        // recommended 级别：推迟 24 小时后再提醒
-        if (updateInfo?.updateLevel == UpdateLevel.RECOMMENDED) {
-            viewModelScope.launch {
-                repository.saveLastUpdateCheck(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(6))
-            }
-        }
-        updateInfo = null
-        downloadStatus = DownloadStatus.Idle
-    }
 
     private fun save() {
         pendingSaveJob?.cancel()

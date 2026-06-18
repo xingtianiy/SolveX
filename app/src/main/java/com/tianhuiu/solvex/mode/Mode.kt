@@ -25,6 +25,7 @@ data class ModeConfig(
     val allowNotification: Boolean = true,
     val showFloatingToast: Boolean = true,
     val autoOpenDrawer: Boolean = true,
+    val enableCrop: Boolean? = null,
     val ocrProviderId: String? = null,
     val ocrModel: String? = null,
     val textProviderId: String? = null,

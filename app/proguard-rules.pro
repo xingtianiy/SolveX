@@ -22,5 +22,4 @@
 
 # Shizuku
 -keep class rikka.shizuku.** { *; }
--keep class com.tianhuiu.solvex.service.IShizukuShellService* { *; }
--keep class com.tianhuiu.solvex.service.ShizukuShellService { *; }
+-keep class com.tianhuiu.solvex.service.** { *; }

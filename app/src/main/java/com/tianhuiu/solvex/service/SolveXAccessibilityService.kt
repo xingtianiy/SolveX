@@ -10,7 +10,7 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
 /**
- * SolveX 无障碍服务：通过 AccessibilityService.takeScreenshot() (API 34+) 实现静默截屏。
+ * 提供基于无障碍服务的静默截屏能力。
  */
 class SolveXAccessibilityService : AccessibilityService() {
 
@@ -19,7 +19,9 @@ class SolveXAccessibilityService : AccessibilityService() {
         var instance: SolveXAccessibilityService? = null
             private set
 
-        /** 后台截屏线程 */
+        /**
+         * 用于处理截屏数据的单线程执行器。
+         */
         private val screenshotExecutor = Executors.newSingleThreadExecutor { r ->
             Thread(r, "SolveX-Screenshot").apply { priority = Thread.NORM_PRIORITY }
         }
@@ -46,11 +48,11 @@ class SolveXAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * 兼容截屏：API 34+ 使用 [takeScreenshot]，否则返回 null。
+     * 针对不同 Android 版本执行兼容性截屏。
      */
     suspend fun takeScreenshotCompat(): Bitmap? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            Log.w("SolveXA11y", "takeScreenshot requires API 34+")
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Log.w("SolveXA11y", "takeScreenshot requires API 30+")
             return null
         }
         return suspendCancellableCoroutine { cont ->

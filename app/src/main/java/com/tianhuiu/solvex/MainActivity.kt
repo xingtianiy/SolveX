@@ -1,7 +1,6 @@
 package com.tianhuiu.solvex
 
 import android.app.ActivityManager
-import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
@@ -16,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import com.tianhuiu.solvex.data.SettingsRepository
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.SolveXApp
+import com.tianhuiu.solvex.ui.UpdateViewModel
 import com.tianhuiu.solvex.utils.NotificationUtils
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
  */
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<MainViewModel>()
+    private val updateViewModel by viewModels<UpdateViewModel>()
 
     private val projectionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             viewModel.requestMediaProjection.collect {
                 val manager =
-                    getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 projectionLauncher.launch(manager.createScreenCaptureIntent())
             }
         }
@@ -61,20 +62,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Shizuku 监听器：在 onCreate 中永久注册，不随 ON_START/ON_STOP 生命周期注销
+        // （Shizuku API 在权限结果送达后会自动清理监听器，无需手动移除）
+        viewModel.registerShizukuListeners()
+        updateViewModel.initialize()
+
         lifecycle.addObserver(LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) {
-                viewModel.registerShizukuListeners()
-            }
-            if (event == Lifecycle.Event.ON_STOP) {
-                viewModel.unregisterShizukuListeners()
-            }
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.checkPermissions()
             }
         })
 
         setContent {
-            SolveXApp(viewModel)
+            SolveXApp(viewModel, updateViewModel)
         }
     }
 
@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
 
     private fun updateRecentsVisibility(exclude: Boolean) {
         try {
-            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
             am.appTasks.forEach { task ->
                 task.setExcludeFromRecents(exclude)
             }

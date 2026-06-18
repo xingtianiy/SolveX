@@ -162,7 +162,7 @@ fun HistoryScreen(
         delay(600)
         initialLoadDone = true
     }
-    val isInitialLoading = !initialLoadDone && historyItems.isEmpty()
+    !initialLoadDone && historyItems.isEmpty()
 
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(

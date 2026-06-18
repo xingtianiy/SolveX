@@ -101,7 +101,7 @@ fun ModelSettingsScreen(
     var draggedItemIndex by remember { mutableStateOf<Int?>(null) }
     var draggingOffset by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    LocalContext.current
 
     val sheetState = rememberModalBottomSheetState()
     var showProviderSheet by remember { mutableStateOf(false) }
@@ -239,8 +239,7 @@ fun ModelSettingsScreen(
                             IconButton(
                                 onClick = {
                                     scope.launch {
-                                        val result = viewModel.testConnectivity(provider)
-                                        when (result) {
+                                        when (val result = viewModel.testConnectivity(provider)) {
                                             is ConnectivityTestState.Success ->
                                                 viewModel.showFeedbackDialog(
                                                     title = "连接成功",
