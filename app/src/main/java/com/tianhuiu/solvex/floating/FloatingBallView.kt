@@ -91,16 +91,20 @@ fun FloatingBallView(
 
     val backgroundColor = when (status) {
         BallStatus.IDLE -> Color(0xFF2196F3)
+        BallStatus.LOW_PROFILE -> Color(0xFF9E9E9E)
         BallStatus.RUNNING -> Color(0xFF673AB7)
         BallStatus.SUCCESS -> Color(0xFF4CAF50)
         BallStatus.ERROR -> Color(0xFFF44336)
         BallStatus.PROTECTED -> Color(0xFFFFA726)
     }
 
-    val finalAlpha = if (status == BallStatus.PROTECTED) {
-        if (displayMode == BallDisplayMode.FULL) 0.6f else 0.2f
-    } else {
-        if (displayMode == BallDisplayMode.FULL) 1f else 0.4f
+    val finalAlpha = when (status) {
+        BallStatus.PROTECTED -> if (displayMode == BallDisplayMode.FULL) 0.6f else 0.2f
+        BallStatus.LOW_PROFILE -> if (displayMode == BallDisplayMode.FULL) 0.3f else 0.15f
+        BallStatus.ERROR -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.8f
+        BallStatus.SUCCESS -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.6f
+        BallStatus.RUNNING -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.55f
+        BallStatus.IDLE -> if (displayMode == BallDisplayMode.FULL) 1f else 0.4f
     }
 
     Box(
@@ -123,7 +127,7 @@ fun FloatingBallView(
     ) {
         if (displayMode == BallDisplayMode.FULL) {
             when (status) {
-                BallStatus.IDLE -> {
+                BallStatus.IDLE, BallStatus.LOW_PROFILE -> {
                     Icon(
                         imageVector = Icons.Filled.SmartToy,
                         contentDescription = null,

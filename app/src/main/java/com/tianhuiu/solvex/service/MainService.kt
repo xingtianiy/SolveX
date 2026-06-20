@@ -155,7 +155,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                         val cropped = manager.crop(image)
                                         if (cropped == null) {
                                             // 用户取消了裁剪，恢复状态
-                                            updateStatus(BallStatus.IDLE)
+                                            updateStatus(defaultIdleStatus)
                                             return@launch
                                         }
                                         if (cropped !== image) {
@@ -209,14 +209,14 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                         if (pendingUpdateJob?.isActive == true) return
                                         pendingUpdateJob =
                                             lifecycle.coroutineScope.launch(Dispatchers.IO) {
-                                            delay(500)
-                                            historyRepository.updateHistoryItem(historyId) { current ->
-                                                current.copy(
-                                                    query = currentQueryText.ifEmpty { current.query },
-                                                    result = currentResultText.ifEmpty { current.result }
-                                                )
+                                                delay(500)
+                                                historyRepository.updateHistoryItem(historyId) { current ->
+                                                    current.copy(
+                                                        query = currentQueryText.ifEmpty { current.query },
+                                                        result = currentResultText.ifEmpty { current.result }
+                                                    )
+                                                }
                                             }
-                                        }
                                     }
 
                                     try {
@@ -434,7 +434,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                 processingJob?.cancel()
                 processingJob = null
                 drawerManager?.hide()
-                updateStatus(BallStatus.IDLE)
+                updateStatus(defaultIdleStatus)
             }
             onLongClick = {
                 SystemUtils.vibrate(this@MainService, 50)
@@ -455,8 +455,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         val permissions = config.permissions
 
         // 如果开启了隐匿模式，且 Shizuku 就绪，启动/恢复监听
-        if (permissions.enableStealthMode && 
-            rikka.shizuku.Shizuku.pingBinder() && 
+        if (permissions.enableStealthMode &&
+            rikka.shizuku.Shizuku.pingBinder() &&
             rikka.shizuku.Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             startStealthMonitor()
         } else {
@@ -482,11 +482,31 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         stealthJob = lifecycle.coroutineScope.launch {
             // 缓存服务引用，避免每秒重新绑定
             var svc: IShizukuShellService? = null
+            // Shizuku 连续获取失败计数，超过上限后退出循环，避免空转
+            var consecutiveFailures = 0
+            val maxFailures = 10
+
+            // 初始状态设为低调模式，待首次探测到隐私窗口后自动切换为 PROTECTED
+            isStealthActive = false
+            floatingBallManager?.updateStatus(BallStatus.LOW_PROFILE)
+            // 隐匿模式下，SUCCESS/ERROR 自动恢复时回到 LOW_PROFILE 而非 IDLE
+            floatingBallManager?.defaultIdleStatus = BallStatus.LOW_PROFILE
             while (true) {
                 try {
                     // 仅在引用失效时重新获取
                     if (svc == null || !svc.asBinder().isBinderAlive) {
                         svc = ShizukuUserServiceClient.acquire(this@MainService)
+                        if (svc == null) {
+                            consecutiveFailures++
+                            if (consecutiveFailures >= maxFailures) {
+                                android.util.Log.w("MainService", "Stealth monitor: Shizuku unavailable after $maxFailures retries, stopping")
+                                break
+                            }
+                            delay(500)
+                            continue
+                        } else {
+                            consecutiveFailures = 0
+                        }
                     }
                     if (svc != null) {
                         val count = svc.getSecureWindowCount()
@@ -502,7 +522,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                             if (shouldBeSecure) {
                                 floatingBallManager?.updateStatus(BallStatus.PROTECTED)
                             } else {
-                                floatingBallManager?.updateStatus(BallStatus.IDLE)
+                                floatingBallManager?.updateStatus(BallStatus.LOW_PROFILE)
                             }
                         }
                     }
@@ -510,10 +530,15 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                     // binder 死亡，清除引用让下一轮重新获取
                     android.util.Log.d("MainService", "Stealth monitor: binder died, will re-acquire")
                     svc = null
+                    consecutiveFailures++
+                    if (consecutiveFailures >= maxFailures) {
+                        android.util.Log.w("MainService", "Stealth monitor: Shizuku binder keeps dying, stopping")
+                        break
+                    }
                 } catch (e: Exception) {
                     android.util.Log.e("MainService", "Stealth monitor error", e)
                 }
-                delay(1000)
+                delay(500)
             }
         }
     }
@@ -522,6 +547,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         stealthJob?.cancel()
         stealthJob = null
         isStealthActive = false
+        // 退出隐匿模式时，自动恢复状态改回 IDLE
+        floatingBallManager?.defaultIdleStatus = BallStatus.IDLE
     }
 
     private fun updateWindowsSecure(enabled: Boolean) {
@@ -635,13 +662,13 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                 val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
                 @Suppress("DEPRECATION")
                 val data = intent?.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
-                
+
                 if (resultCode != 0 && data != null) {
                     SystemCaptureEngine(this, resultCode, data).also { engine ->
                         // 在 Android 14 上，prepare 内部的 getMediaProjection 必须在 startForeground 之后
-                        lifecycle.coroutineScope.launch { 
+                        lifecycle.coroutineScope.launch {
                             delay(100) // 给系统一点反应时间处理前台服务状态
-                            engine.prepare() 
+                            engine.prepare()
                         }
                     }
                 } else null

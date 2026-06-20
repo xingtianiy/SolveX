@@ -5,6 +5,7 @@ package com.tianhuiu.solvex.floating
  */
 enum class BallStatus {
     IDLE,       // 空闲
+    LOW_PROFILE,// 隐匿低调状态
     RUNNING,    // 处理中
     SUCCESS,    // 成功
     ERROR,      // 失败
@@ -16,5 +17,5 @@ enum class BallStatus {
  */
 enum class BallDisplayMode {
     FULL,           // 全显圆球
-    HIDDEN_STRIP    // 侧边贴边（隐藏状态）
+    HIDDEN_STRIP    // 侧边贴边
 }

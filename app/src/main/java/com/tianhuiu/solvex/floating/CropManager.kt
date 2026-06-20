@@ -35,6 +35,13 @@ class CropManager(private val context: Context) {
         flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                WindowManager.LayoutParams::class.java
+                    .getMethod("setTrustedOverlay", Boolean::class.javaPrimitiveType)
+                    .invoke(this, true)
+            } catch (_: Exception) { }
+        }
         width = WindowManager.LayoutParams.MATCH_PARENT
         height = WindowManager.LayoutParams.MATCH_PARENT
     }
