@@ -43,6 +43,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.tianhuiu.solvex.BuildConfig
 import com.tianhuiu.solvex.R
+import com.tianhuiu.solvex.ui.MainViewModel
+import com.tianhuiu.solvex.ui.UpdateViewModel
+import com.tianhuiu.solvex.ui.components.SettingBadge
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 import com.tianhuiu.solvex.ui.components.SolveXDialog
@@ -53,8 +56,8 @@ import com.tianhuiu.solvex.ui.components.SolveXDialog
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
-    viewModel: com.tianhuiu.solvex.ui.MainViewModel,
-    updateViewModel: com.tianhuiu.solvex.ui.UpdateViewModel,
+    viewModel: MainViewModel,
+    updateViewModel: UpdateViewModel,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -110,6 +113,9 @@ fun AboutScreen(
                     subLabel = if (isChecking) "正在检测更新" else "版本 ${BuildConfig.VERSION_NAME}",
                     icon = Icons.Default.Info,
                     showArrow = true,
+                    badge = if (updateViewModel.updateInfo != null) {
+                        { SettingBadge() }
+                    } else null,
                     onClick = {
                         if (!isChecking) {
                             updateViewModel.checkForUpdates(manual = true)
@@ -268,12 +274,14 @@ fun AboutInfoItem(
     subLabel: String? = null,
     icon: ImageVector? = null,
     showArrow: Boolean = false,
+    badge: @Composable (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     SettingsItem(
         label = label,
         subLabel = subLabel,
         icon = icon,
+        badge = badge,
         trailing = if (showArrow) {
             {
                 Icon(

@@ -43,6 +43,9 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     var isCheckingUpdate by mutableStateOf(false)
         private set
 
+    var showDialogManually by mutableStateOf(false)
+        private set
+
     /**
      * 启动时恢复缓存更新信息，按策略检测更新。
      */
@@ -57,17 +60,15 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             val lastCheck = repository.lastUpdateCheckFlow.first()
-            val consecutiveNoUpdate = repository.consecutiveNoUpdateFlow.first()
             val now = System.currentTimeMillis()
             val isCriticalPending = updateInfo?.updateLevel == UpdateLevel.CRITICAL
 
-            val intervalDays = when {
+            val intervalMillis = when {
                 isCriticalPending -> 0L
-                consecutiveNoUpdate >= 3 -> 14L
-                updateInfo != null -> 1L
-                else -> 7L
+                else -> 0L 
             }
-            if (now - lastCheck > TimeUnit.DAYS.toMillis(intervalDays)) {
+
+            if (now - lastCheck >= intervalMillis) {
                 checkForUpdates(manual = false)
             }
         }
@@ -78,7 +79,10 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun checkForUpdates(manual: Boolean = false) {
         viewModelScope.launch {
-            if (manual) isCheckingUpdate = true
+            if (manual) {
+                isCheckingUpdate = true
+                showDialogManually = true
+            }
 
             val savedEtag = repository.updateEtagFlow.first()
 
@@ -152,6 +156,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun dismissUpdateDialog() {
         if (updateInfo?.isDismissible != true) return
+        showDialogManually = false
         if (updateInfo?.updateLevel == UpdateLevel.RECOMMENDED) {
             viewModelScope.launch {
                 repository.saveLastUpdateCheck(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(6))

@@ -22,6 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.tianhuiu.solvex.mode.ModeRegistry
+import com.tianhuiu.solvex.ui.MainViewModel
+import com.tianhuiu.solvex.ui.UpdateViewModel
+import com.tianhuiu.solvex.ui.components.SettingBadge
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 
@@ -30,7 +33,11 @@ import com.tianhuiu.solvex.ui.components.SettingsItem
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavController) {
+fun SettingsScreen(
+    navController: NavController,
+    viewModel: MainViewModel,
+    updateViewModel: UpdateViewModel
+) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -67,7 +74,10 @@ fun SettingsScreen(navController: NavController) {
                         label = "模型供应商",
                         subLabel = "配置 LLM 模型提供方及 API 密钥",
                         icon = Icons.Default.SmartToy,
-                        onClick = { navController.navigate("settings/models") }
+                        onClick = { navController.navigate("settings/models") },
+                        badge = if (viewModel.providers.all { it.apiKey.isBlank() }) {
+                            { SettingBadge(text = "未配置") }
+                        } else null
                     )
                     SettingsItem(
                         label = "助手管理",
@@ -89,7 +99,10 @@ fun SettingsScreen(navController: NavController) {
                         label = "权限设置",
                         subLabel = "管理系统通知及稳定性权限",
                         icon = Icons.Default.Layers,
-                        onClick = { navController.navigate("settings/permissions") }
+                        onClick = { navController.navigate("settings/permissions") },
+                        badge = if (!viewModel.isAllPermissionsReady) {
+                            { SettingBadge(text = "未就绪") }
+                        } else null
                     )
                     SettingsItem(
                         label = "导入导出",
@@ -111,7 +124,10 @@ fun SettingsScreen(navController: NavController) {
                         label = "关于我们",
                         subLabel = "查看版本信息及开源链接",
                         icon = Icons.Default.Info,
-                        onClick = { navController.navigate("settings/about") }
+                        onClick = { navController.navigate("settings/about") },
+                        badge = if (updateViewModel.updateInfo != null) {
+                            { SettingBadge() }
+                        } else null
                     )
                 }
             }

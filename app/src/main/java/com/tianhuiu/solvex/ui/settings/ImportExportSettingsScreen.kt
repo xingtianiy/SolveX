@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.tianhuiu.solvex.ui.ExportData
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.SolveXDialog
@@ -76,7 +77,7 @@ fun ImportExportSettingsScreen(
 
     // Import confirmation state
     var showImportDialog by remember { mutableStateOf(false) }
-    var pendingImportData by remember { mutableStateOf<com.tianhuiu.solvex.ui.ExportData?>(null) }
+    var pendingImportData by remember { mutableStateOf<ExportData?>(null) }
 
     // 选择状态
     val selectedProviders = remember { mutableStateMapOf<String, Boolean>() }

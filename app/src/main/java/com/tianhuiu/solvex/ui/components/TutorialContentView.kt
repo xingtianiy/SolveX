@@ -41,7 +41,7 @@ fun TutorialContent(
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
-    val lines = markdown.split("\n")
+    val lines = markdown.lines()
     val blocks = parseBlocks(lines)
 
     Column(
@@ -116,20 +116,21 @@ private fun parseBlocks(lines: List<String>): List<Block> {
             }
 
             // - / * 无序列表（连续行合并）
-            line.trimStart().startsWith("- ") || line.trimStart().startsWith("* ") -> {
+            line.trimStart().let { it.startsWith("- ") || it.startsWith("* ") || it.startsWith("-　") } -> {
                 val items = mutableListOf<String>()
-                while (i < lines.size && (lines[i].trimStart().startsWith("- ") || lines[i].trimStart().startsWith("* "))) {
-                    items.add(lines[i].trimStart().removePrefix("- ").removePrefix("* "))
+                while (i < lines.size && (lines[i].trimStart().startsWith("- ") || lines[i].trimStart().startsWith("* ") || lines[i].trimStart().startsWith("-　"))) {
+                    items.add(lines[i].trimStart().substring(2).trim())
                     i++
                 }
                 blocks.add(Block.UnorderedList(items))
             }
 
             // 1. 2. 有序列表（连续行合并）
-            line.trimStart().matches(Regex("^\\d+\\.\\s.*")) -> {
+            line.trimStart().matches(Regex("^\\d+\\.[\\s\\xA0]+.*")) -> {
                 val items = mutableListOf<String>()
-                while (i < lines.size && lines[i].trimStart().matches(Regex("^\\d+\\.\\s.*"))) {
-                    items.add(lines[i].trimStart().replaceFirst(Regex("^\\d+\\.\\s"), ""))
+                val listRegex = Regex("^\\d+\\.[\\s\\xA0]+")
+                while (i < lines.size && lines[i].trimStart().matches(Regex("^\\d+\\.[\\s\\xA0]+.*"))) {
+                    items.add(lines[i].trimStart().replaceFirst(listRegex, "").trim())
                     i++
                 }
                 blocks.add(Block.OrderedList(items))
@@ -156,17 +157,19 @@ private fun parseBlocks(lines: List<String>): List<Block> {
                 val paraLines = mutableListOf(line.trim())
                 i++
                 while (i < lines.size && lines[i].isNotBlank()
-                    && !lines[i].startsWith("#")
+                    && !lines[i].trimStart().startsWith("#")
                     && !lines[i].trimStart().startsWith("- ")
                     && !lines[i].trimStart().startsWith("* ")
-                    && !lines[i].trimStart().matches(Regex("^\\d+\\.\\s.*"))
+                    && !lines[i].trimStart().startsWith("-　")
+                    && !lines[i].trimStart().matches(Regex("^\\d+\\.[\\s\\xA0]+.*"))
                     && !lines[i].trimStart().startsWith(">")
                     && !lines[i].trim().matches(Regex("^-{3,}$"))
                 ) {
                     paraLines.add(lines[i].trim())
                     i++
                 }
-                blocks.add(Block.Paragraph(paraLines.joinToString(" ")))
+                // 中文环境下保留换行符，而不是用空格连接
+                blocks.add(Block.Paragraph(paraLines.joinToString("\n")))
             }
         }
     }
@@ -350,8 +353,8 @@ private fun OrderedList(items: List<String>) {
                         lineHeight = 24.sp,
                     ),
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.width(24.dp),
                 )
+                Spacer(Modifier.width(6.dp))
                 Text(
                     text = renderInline(item),
                     style = MaterialTheme.typography.bodyMedium.copy(

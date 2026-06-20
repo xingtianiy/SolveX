@@ -1,6 +1,7 @@
 package com.tianhuiu.solvex
 
 import android.app.Application
+import com.tianhuiu.solvex.ui.MainViewModel
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 /**
@@ -13,7 +14,7 @@ class SolveXApplication : Application() {
     /**
      * 全局持有 MainViewModel 引用，方便 Service 触发状态刷新。
      */
-    var viewModel: com.tianhuiu.solvex.ui.MainViewModel? = null
+    var viewModel: MainViewModel? = null
 
     override fun onCreate() {
         super.onCreate()

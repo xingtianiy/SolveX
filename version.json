@@ -1,13 +1,13 @@
 {
-  "versionCode": 8,
-  "versionName": "0.0.8-alpha",
+  "versionCode": 9,
+  "versionName": "0.0.9-alpha",
   "releaseDate": "2026-06-20",
-  "level": "recommended",
-  "apkSize": "18 MB",
+  "level": "optional",
+  "apkSize": "19 MB",
   "updateLog": [
-    "悬浮球新增低调模式，优化悬浮球层级冲突",
+    "优化隐私模式联动、完善更新机制以及重构设置页视觉引导",
     "新增隐匿模式，优化监听提速、修复计数异常（实验性功能，未实测）"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.8-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.8-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.9-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.9-alpha/app-release.apk"
 }

@@ -24,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.tianhuiu.solvex.data.models.UpdateLevel
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.UpdateDialog
 import com.tianhuiu.solvex.ui.history.HistoryDetailScreen
@@ -69,12 +70,15 @@ fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
 
         // 软件更新弹窗
         updateViewModel.updateInfo?.let { info ->
-            UpdateDialog(
-                info = info,
-                downloadStatus = updateViewModel.downloadStatus,
-                onDismiss = { updateViewModel.dismissUpdateDialog() },
-                onUpdate = { updateViewModel.startUpdate() }
-            )
+            // 如果是 OPTIONAL 等级，只有在手动检查时才弹出弹窗，否则仅显示红点（静默提示）
+            if (info.updateLevel != UpdateLevel.OPTIONAL || updateViewModel.showDialogManually) {
+                UpdateDialog(
+                    info = info,
+                    downloadStatus = updateViewModel.downloadStatus,
+                    onDismiss = { updateViewModel.dismissUpdateDialog() },
+                    onUpdate = { updateViewModel.startUpdate() }
+                )
+            }
         }
 
         // 全局通用弹窗
@@ -159,7 +163,7 @@ fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
                     )
                 }
                 composable(Screen.Settings.route) {
-                    SettingsScreen(navController)
+                    SettingsScreen(navController, viewModel, updateViewModel)
                 }
                 composable("settings/general") {
                     GeneralSettingsScreen(

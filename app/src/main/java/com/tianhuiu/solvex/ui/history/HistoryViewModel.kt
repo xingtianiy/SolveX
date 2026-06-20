@@ -3,6 +3,7 @@ package com.tianhuiu.solvex.ui.history
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.tianhuiu.solvex.SolveXApplication
 import com.tianhuiu.solvex.data.models.HistoryItem
 import com.tianhuiu.solvex.utils.FileUtils
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +21,7 @@ import kotlinx.coroutines.launch
  */
 class HistoryViewModel(application: Application) : AndroidViewModel(application) {
     private val repository =
-        (application as com.tianhuiu.solvex.SolveXApplication).container.historyRepository
+        (application as SolveXApplication).container.historyRepository
 
     // 原始数据流
     private val allItemsFlow = repository.historyItemsFlow

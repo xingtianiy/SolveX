@@ -1,6 +1,7 @@
 package com.tianhuiu.solvex.service
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -20,6 +21,7 @@ import com.tianhuiu.solvex.capture.SystemCaptureEngine
 import com.tianhuiu.solvex.data.HistoryRepository
 import com.tianhuiu.solvex.data.SettingsRepository
 import com.tianhuiu.solvex.data.models.AnalysisStatus
+import com.tianhuiu.solvex.data.models.AppConfig
 import com.tianhuiu.solvex.data.models.AutomationAction
 import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.data.models.EngineType
@@ -47,6 +49,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import rikka.shizuku.Shizuku
 
 /**
  * 协调应用生命周期、悬浮球控制与核心业务流的基础服务。
@@ -451,13 +454,13 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         }
     }
 
-    private fun applyPrivacyPolicy(config: com.tianhuiu.solvex.data.models.AppConfig) {
+    private fun applyPrivacyPolicy(config: AppConfig) {
         val permissions = config.permissions
 
         // 如果开启了隐匿模式，且 Shizuku 就绪，启动/恢复监听
         if (permissions.enableStealthMode &&
-            rikka.shizuku.Shizuku.pingBinder() &&
-            rikka.shizuku.Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Shizuku.pingBinder() &&
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
             startStealthMonitor()
         } else {
             stopStealthMonitor()
@@ -471,8 +474,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
         if (stealthJob?.isActive == true) return
 
         // 检查 Shizuku 状态
-        if (!rikka.shizuku.Shizuku.pingBinder() ||
-            rikka.shizuku.Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (!Shizuku.pingBinder() ||
+            Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
             lifecycle.coroutineScope.launch {
                 _serviceError.emit("隐匿模式需要 Shizuku 授权，请在设置中开启")
             }

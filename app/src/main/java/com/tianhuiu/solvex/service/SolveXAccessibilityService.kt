@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
 import android.os.Build
 import android.util.Log
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executors
@@ -58,7 +59,7 @@ class SolveXAccessibilityService : AccessibilityService() {
         return suspendCancellableCoroutine { cont ->
             try {
                 takeScreenshot(
-                    android.view.Display.DEFAULT_DISPLAY,
+                    Display.DEFAULT_DISPLAY,
                     screenshotExecutor,
                     object : TakeScreenshotCallback {
                         override fun onSuccess(screenshot: ScreenshotResult) {

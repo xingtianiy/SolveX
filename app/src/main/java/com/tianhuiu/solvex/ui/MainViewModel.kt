@@ -4,14 +4,17 @@ import android.app.Application
 import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.tianhuiu.solvex.SolveXApplication
 import com.tianhuiu.solvex.data.SettingsRepository
 import com.tianhuiu.solvex.data.models.AppConfig
 import com.tianhuiu.solvex.data.models.AssistantConfig
@@ -60,7 +63,7 @@ data class GlobalDialogData(
     val onConfirm: () -> Unit = {},
     val onDismiss: (() -> Unit)? = null,
     val isDestructive: Boolean = false,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+    val icon: ImageVector? = null
 )
 
 /**
@@ -70,14 +73,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
 
     init {
-        (application as com.tianhuiu.solvex.SolveXApplication).viewModel = this
+        (application as SolveXApplication).viewModel = this
     }
     override fun onCleared() {
         super.onCleared()
-        (getApplication<Application>() as com.tianhuiu.solvex.SolveXApplication).viewModel = null
+        (getApplication<Application>() as SolveXApplication).viewModel = null
     }
 
-    private val container = (application as com.tianhuiu.solvex.SolveXApplication).container
+    private val container = (application as SolveXApplication).container
     private val client = container.okHttpClient
     private val json = Json {
         ignoreUnknownKeys = true
@@ -153,6 +156,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var launchCount by mutableStateOf(0)
         private set
 
+    /** 是否满足当前模式下的所有必需权限 */
+    val isAllPermissionsReady: Boolean
+        get() {
+            val mode = permissions.captureMode
+            return isOverlayPermissionGranted && when (mode) {
+                CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
+                CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
+                else -> true
+            }
+        }
+
     /** 全局通用弹窗状态 */
     var globalDialogState by mutableStateOf<GlobalDialogData?>(null)
         private set
@@ -161,7 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         globalDialogState = data
     }
 
-    fun showFeedbackDialog(title: String, message: String, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+    fun showFeedbackDialog(title: String, message: String, icon: ImageVector? = null) {
         showGlobalDialog(
             GlobalDialogData(
                 title = title,
@@ -183,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val inAppNotifications =
-        (application as com.tianhuiu.solvex.SolveXApplication).container.appNotificationManager.notifications
+        (application as SolveXApplication).container.appNotificationManager.notifications
 
     private val _requestMediaProjection = MutableSharedFlow<Unit>()
     val requestMediaProjection = _requestMediaProjection.asSharedFlow()
@@ -209,7 +223,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         title = "服务异常",
                         message = error,
                         confirmText = "知道了",
-                        icon = androidx.compose.material.icons.Icons.Default.Warning
+                        icon = Icons.Default.Warning
                     )
                 )
             }
@@ -310,7 +324,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 移除应用内通知。
      */
     fun dismissInAppNotification(id: String) {
-        (getApplication<Application>() as com.tianhuiu.solvex.SolveXApplication).container.appNotificationManager.dismiss(
+        (getApplication<Application>() as SolveXApplication).container.appNotificationManager.dismiss(
             id
         )
     }
@@ -529,7 +543,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
 
         val notificationManager =
-            (context as com.tianhuiu.solvex.SolveXApplication).container.appNotificationManager
+            (context as SolveXApplication).container.appNotificationManager
 
         // 判断当前截屏模式下是否已就绪（必需权限全部满足）
         val mode = permissions.captureMode
