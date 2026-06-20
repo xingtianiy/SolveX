@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * 应用主 Activity：负责初始化、处理深度链接及请求系统录屏权限。
+ * 应用主 Activity
  */
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<MainViewModel>()
@@ -54,7 +54,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // 动态控制隐匿模式：从最近任务列表中显示/隐藏
         lifecycleScope.launch {
             val repository = SettingsRepository(applicationContext)
             repository.appConfigFlow.collectLatest { config ->
@@ -62,8 +61,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Shizuku 监听器：在 onCreate 中永久注册，不随 ON_START/ON_STOP 生命周期注销
-        // （Shizuku API 在权限结果送达后会自动清理监听器，无需手动移除）
         viewModel.registerShizukuListeners()
         updateViewModel.initialize()
 

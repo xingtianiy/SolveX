@@ -59,11 +59,20 @@ fun SettingsScreen(
             item {
                 SettingsGroup(title = "模式配置") {
                     ModeRegistry.all.forEach { mode ->
+                        val config = viewModel.allModeConfigs[mode.id] ?: mode.defaultConfig()
+                        val isUnconfigured = config.ocrProviderId.isNullOrBlank() && 
+                                           config.textProviderId.isNullOrBlank() && 
+                                           config.visionProviderId.isNullOrBlank() &&
+                                           viewModel.defaultProviderId.isNullOrBlank()
+
                         SettingsItem(
                             label = mode.displayName,
                             subLabel = mode.description,
                             icon = mode.icon,
-                            onClick = { navController.navigate("settings/mode/${mode.id}") }
+                            onClick = { navController.navigate("settings/mode/${mode.id}") },
+                            badge = if (isUnconfigured) {
+                                { SettingBadge(text = "未配置") }
+                            } else null
                         )
                     }
                 }

@@ -227,9 +227,9 @@ fun HistoryDetailScreen(
                             }
 
                             val isQueryPlaceholder =
-                                currentItem.query == "思考中..." || currentItem.query.isBlank()
+                                currentItem.query == "正在思考中..." || currentItem.query.isBlank()
                             val isResultPlaceholder =
-                                sections.all { it.title.isEmpty() && (it.content == "思考中..." || it.content.isBlank()) }
+                                sections.all { it.title.isEmpty() && (it.content == "正在思考中..." || it.content.isBlank()) }
 
                             // 1. 提取阶段
                             if (currentItem.status == AnalysisStatus.PROCESSING && isQueryPlaceholder) {

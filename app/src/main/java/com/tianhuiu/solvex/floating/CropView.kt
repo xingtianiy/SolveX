@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 
 /**
- * 裁剪视图：默认显示初始裁剪框，每次拖拽重新绘制区域，确认后裁剪。
+ * 裁剪视图
  */
 @Composable
 fun CropView(
@@ -98,8 +98,8 @@ fun CropView(
                     val offsetY = (containerH - displayH) / 2f
                     val scale = displayW / bitmapW
 
-                    fun toBx(dx: Float) = ((dx - offsetX) / scale).coerceIn(0f, bitmapW)
-                    fun toBy(dy: Float) = ((dy - offsetY) / scale).coerceIn(0f, bitmapH)
+                    fun toBx(dx: Float) = (dx - offsetX) / scale
+                    fun toBy(dy: Float) = (dy - offsetY) / scale
                     fun toDx(bx: Float) = offsetX + bx * scale
                     fun toDy(by: Float) = offsetY + by * scale
 
@@ -118,10 +118,10 @@ fun CropView(
                                         change.consume()
                                         val bx = toBx(change.position.x)
                                         val by = toBy(change.position.y)
-                                        cropLeft = minOf(dragStartBx, bx).coerceIn(0f, bitmapW)
-                                        cropTop = minOf(dragStartBy, by).coerceIn(0f, bitmapH)
-                                        cropRight = maxOf(dragStartBx, bx).coerceIn(0f, bitmapW)
-                                        cropBottom = maxOf(dragStartBy, by).coerceIn(0f, bitmapH)
+                                        cropLeft = minOf(dragStartBx, bx)
+                                        cropTop = minOf(dragStartBy, by)
+                                        cropRight = maxOf(dragStartBx, bx)
+                                        cropBottom = maxOf(dragStartBy, by)
                                     }
                                 )
                             }
@@ -160,7 +160,7 @@ fun CropView(
                         onClick = onUseFull,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("使用全图")
+                        Text("全屏解析")
                     }
                     Button(
                         onClick = {
@@ -182,8 +182,8 @@ fun CropView(
         IconButton(
             onClick = onCancel,
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(top = 16.dp, start = 16.dp)
+                .align(Alignment.TopEnd)
+                .padding(top = 16.dp, end = 16.dp)
                 .statusBarsPadding()
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.45f))

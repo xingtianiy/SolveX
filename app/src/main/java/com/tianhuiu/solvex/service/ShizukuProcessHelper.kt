@@ -7,13 +7,7 @@ import rikka.shizuku.Shizuku
 import java.lang.reflect.Method
 
 /**
- * 通过 Shizuku newProcess API 直接执行命令（避免 bindUserService）。
- *
- * Shizuku v13 中将 newProcess 标记为 private（计划在 v14 移除），
- * 但底层 IShizukuService 仍然支持该功能。本工具通过反射调用，
- * 在 Shizuku v13 服务端上正常工作。
- *
- * 当 bindUserService 在部分设备（如 OPPO）上超时时，此方案可绕过该问题。
+ * 通过 Shizuku newProcess API 直接执行命令
  */
 object ShizukuProcessHelper {
     private const val TAG = "ShizukuProcess"

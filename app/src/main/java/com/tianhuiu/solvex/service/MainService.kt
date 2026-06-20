@@ -49,10 +49,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 
 /**
- * 协调应用生命周期、悬浮球控制与核心业务流的基础服务。
+ * 核心业务流
  */
 class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -94,7 +95,6 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     override fun onCreate() {
         super.onCreate()
         _isRunning.value = true
-        // 立即检查一次状态，确保 UI 就绪通知实时刷新
         (application as SolveXApplication).viewModel?.checkPermissions()
         savedStateRegistryController.performRestore(null)
         repository = SettingsRepository(this)
@@ -122,7 +122,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                             val config = repository.appConfigFlow.first()
                             drawerManager?.show(
                                 historyId = id,
-                                side = config.permissions.drawerSettings.side,
+                                side = config.currentModeConfig().drawerSide,
                                 widthPercent = config.permissions.drawerSettings.widthPercent,
                                 showMetadata = false,
                                 autoScrollEnabled = config.autoScrollContent
@@ -133,23 +133,17 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                     processingJob = lifecycle.coroutineScope.launch {
                         try {
                             updateStatus(BallStatus.RUNNING)
-
-                            // 截图前隐藏悬浮球，并等待 UI 更新
                             floatingBallManager?.tempHide()
-                            delay(100) // 给 WindowManager 一点时间应用更改
-
+                            delay(100)
                             val bitmap: android.graphics.Bitmap? = try {
                                 captureEngine?.capture()
                             } finally {
-                                // 无论截图成功与否，都恢复悬浮球
                                 floatingBallManager?.restore()
                             }
 
                             if (bitmap != null) {
                                 SystemUtils.vibrateSuccess(this@MainService)
                                 val config = repository.appConfigFlow.first()
-
-                                // 根据模式和配置决定是否需要裁剪
                                 var image: android.graphics.Bitmap = bitmap
                                 val mode = ModeRegistry.get(config.selectedModeId)
                                 val needCrop = config.currentModeConfig().enableCrop ?: mode.shouldCrop
@@ -157,16 +151,16 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                     cropManager?.let { manager ->
                                         val cropped = manager.crop(image)
                                         if (cropped == null) {
-                                            // 用户取消了裁剪，恢复状态
                                             updateStatus(defaultIdleStatus)
                                             return@launch
                                         }
-                                        if (cropped !== image) {
-                                            image.recycle()
-                                        }
+                                        // 不主动 recycle 原图，避免 CropView 待绘制帧使用已回收的 Bitmap
                                         image = cropped
                                     }
                                 }
+
+                                // 清理前一次处理残留的占位记录
+                                historyRepository.deleteProcessingItems()
 
                                 // 创建初始记录
                                 val models = pipeline.resolveModels(config)
@@ -176,8 +170,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                 currentHistoryId = historyId
                                 val historyItem = HistoryItem(
                                     id = historyId,
-                                    query = "思考中...",
-                                    result = "思考中...",
+                                    query = "正在思考中...",
+                                    result = "正在思考中...",
                                     imagePath = initialResult.screenshotPath,
                                     mode = config.selectedModeId,
                                     assistantName = initialResult.assistantName,
@@ -196,7 +190,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                                         lifecycle.coroutineScope.launch {
                                             drawerManager?.show(
                                                 historyId = historyId,
-                                                side = config.permissions.drawerSettings.side,
+                                                side = config.currentModeConfig().drawerSide,
                                                 widthPercent = config.permissions.drawerSettings.widthPercent,
                                                 showMetadata = false
                                             )
@@ -262,7 +256,6 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                                             // 执行自动化动作
                                             val action = result.automationAction ?: run {
-                                                // 备选方案：从常规答案提取最终答案并复制
                                                 val finalAnswer =
                                                     NotificationUtils.extractFinalAnswer(
                                                         result.answer ?: ""
@@ -455,93 +448,79 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
     }
 
     private fun applyPrivacyPolicy(config: AppConfig) {
-        val permissions = config.permissions
+        lifecycle.coroutineScope.launch(Dispatchers.IO) {
+            val permissions = config.permissions
+            val isShizukuReady = try {
+                permissions.enableStealthMode &&
+                        Shizuku.pingBinder() &&
+                        Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            } catch (_: Exception) {
+                false
+            }
 
-        // 如果开启了隐匿模式，且 Shizuku 就绪，启动/恢复监听
-        if (permissions.enableStealthMode &&
-            Shizuku.pingBinder() &&
-            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-            startStealthMonitor()
-        } else {
-            stopStealthMonitor()
-            // 恢复为普通地防截屏设置
-            updateWindowsSecure(permissions.enableScreenProtection)
-            floatingBallManager?.updateStatus(BallStatus.IDLE)
+            if (isShizukuReady) {
+                startStealthMonitor()
+            } else {
+                stopStealthMonitor()
+                withContext(Dispatchers.Main) {
+                    updateWindowsSecure(permissions.enableScreenProtection)
+                    if (floatingBallManager?.status == BallStatus.LOW_PROFILE ||
+                        floatingBallManager?.status == BallStatus.PROTECTED) {
+                        floatingBallManager?.updateStatus(BallStatus.IDLE)
+                    }
+                }
+            }
         }
     }
 
     private fun startStealthMonitor() {
         if (stealthJob?.isActive == true) return
 
-        // 检查 Shizuku 状态
-        if (!Shizuku.pingBinder() ||
-            Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-            lifecycle.coroutineScope.launch {
-                _serviceError.emit("隐匿模式需要 Shizuku 授权，请在设置中开启")
-            }
-            return
-        }
-
-        stealthJob = lifecycle.coroutineScope.launch {
-            // 缓存服务引用，避免每秒重新绑定
+        stealthJob = lifecycle.coroutineScope.launch(Dispatchers.IO) {
             var svc: IShizukuShellService? = null
-            // Shizuku 连续获取失败计数，超过上限后退出循环，避免空转
             var consecutiveFailures = 0
             val maxFailures = 10
 
-            // 初始状态设为低调模式，待首次探测到隐私窗口后自动切换为 PROTECTED
-            isStealthActive = false
-            floatingBallManager?.updateStatus(BallStatus.LOW_PROFILE)
-            // 隐匿模式下，SUCCESS/ERROR 自动恢复时回到 LOW_PROFILE 而非 IDLE
-            floatingBallManager?.defaultIdleStatus = BallStatus.LOW_PROFILE
+            withContext(Dispatchers.Main) {
+                isStealthActive = false
+                floatingBallManager?.updateStatus(BallStatus.LOW_PROFILE)
+                floatingBallManager?.defaultIdleStatus = BallStatus.LOW_PROFILE
+            }
+
             while (true) {
                 try {
-                    // 仅在引用失效时重新获取
                     if (svc == null || !svc.asBinder().isBinderAlive) {
                         svc = ShizukuUserServiceClient.acquire(this@MainService)
                         if (svc == null) {
                             consecutiveFailures++
-                            if (consecutiveFailures >= maxFailures) {
-                                android.util.Log.w("MainService", "Stealth monitor: Shizuku unavailable after $maxFailures retries, stopping")
-                                break
-                            }
-                            delay(500)
+                            if (consecutiveFailures >= maxFailures) break
+                            delay(2000)
                             continue
-                        } else {
-                            consecutiveFailures = 0
                         }
+                        consecutiveFailures = 0
                     }
+
                     if (svc != null) {
                         val count = svc.getSecureWindowCount()
                         val shouldBeSecure = count > 0
+                        
                         if (isStealthActive != shouldBeSecure) {
                             isStealthActive = shouldBeSecure
                             val config = repository.appConfigFlow.first()
-                            // 隐匿模式下：如果有隐私窗口，强制开启保护；否则遵循用户基本设置
-                            val finalSecure = shouldBeSecure || config.permissions.enableScreenProtection
-                            updateWindowsSecure(finalSecure)
-
-                            // 视觉反馈：隐匿激活时变色或降低透明度
-                            if (shouldBeSecure) {
-                                floatingBallManager?.updateStatus(BallStatus.PROTECTED)
-                            } else {
-                                floatingBallManager?.updateStatus(BallStatus.LOW_PROFILE)
+                            
+                            withContext(Dispatchers.Main) {
+                                val finalSecure = shouldBeSecure || config.permissions.enableScreenProtection
+                                updateWindowsSecure(finalSecure)
+                                floatingBallManager?.updateStatus(
+                                    if (shouldBeSecure) BallStatus.PROTECTED else BallStatus.LOW_PROFILE
+                                )
                             }
                         }
                     }
-                } catch (_: android.os.DeadObjectException) {
-                    // binder 死亡，清除引用让下一轮重新获取
-                    android.util.Log.d("MainService", "Stealth monitor: binder died, will re-acquire")
-                    svc = null
-                    consecutiveFailures++
-                    if (consecutiveFailures >= maxFailures) {
-                        android.util.Log.w("MainService", "Stealth monitor: Shizuku binder keeps dying, stopping")
-                        break
-                    }
                 } catch (e: Exception) {
-                    android.util.Log.e("MainService", "Stealth monitor error", e)
+                    svc = null
+                    delay(3000)
                 }
-                delay(500)
             }
         }
     }
@@ -575,13 +554,11 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
     override fun onDestroy() {
         _isRunning.value = false
-        // 停止时再次刷新，恢复“就绪”或“未就绪”状态
         (application as SolveXApplication).viewModel?.checkPermissions()
         stopStealthMonitor()
         captureEngine?.release()
         captureEngine = null
         floatingBallManager?.hide()
-        // 取消正在处理的历史记录
         currentHistoryId?.let { id ->
             cleanupScope.launch {
                 historyRepository.updateHistoryItem(id) { current ->
@@ -617,7 +594,7 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
                         val config = repository.appConfigFlow.first()
                         drawerManager?.show(
                             historyId = historyId,
-                            side = config.permissions.drawerSettings.side,
+                            side = config.currentModeConfig().drawerSide,
                             widthPercent = config.permissions.drawerSettings.widthPercent,
                             showMetadata = false
                         )
@@ -643,19 +620,15 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
             .setOngoing(true)
             .build()
 
-        // 统一声明所有可能的类型，确保在不同 Android 版本下的兼容性
         var fgsType = 0
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            // Android 10+ 必须根据实际用途声明类型
             fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             if (captureMode == CaptureMode.SYSTEM) {
                 fgsType = fgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             }
         }
 
-        // Android 14 (API 34) 严格要求：必须在获取 MediaProjection 实例前启动前台服务
         startForeground(NOTIFICATION_ID, notification, fgsType)
-
         // 根据截屏模式创建引擎
         captureEngine?.release()
         captureEngine = when (captureMode) {
@@ -668,9 +641,8 @@ class MainService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryO
 
                 if (resultCode != 0 && data != null) {
                     SystemCaptureEngine(this, resultCode, data).also { engine ->
-                        // 在 Android 14 上，prepare 内部的 getMediaProjection 必须在 startForeground 之后
                         lifecycle.coroutineScope.launch {
-                            delay(100) // 给系统一点反应时间处理前台服务状态
+                            delay(100)
                             engine.prepare()
                         }
                     }

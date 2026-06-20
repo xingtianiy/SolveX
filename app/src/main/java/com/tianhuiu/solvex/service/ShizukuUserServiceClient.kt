@@ -22,11 +22,9 @@ object ShizukuUserServiceClient {
     @Volatile
     private var service: IShizukuShellService? = null
 
-    // 关键：持有强引用，防止 ServiceConnection 在回调前被 GC
     @Volatile
     private var pendingConnection: ServiceConnection? = null
 
-    // 缓存上次绑定的 args，用于超时后清理
     private var lastArgs: UserServiceArgs? = null
 
     /**

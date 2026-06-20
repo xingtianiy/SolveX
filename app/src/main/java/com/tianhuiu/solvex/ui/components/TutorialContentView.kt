@@ -32,8 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 教程内容渲染组件：纯 Compose 实现，无 WebView / 无网络依赖。
- * 支持 ## / ### 标题、**粗体**、`行内代码`、> 引用块、- 无序列表、1. 有序列表。
+ * 内容渲染组件
  */
 @Composable
 fun TutorialContent(
@@ -72,7 +71,7 @@ fun TutorialContent(
     }
 }
 
-// ─── 内部数据模型 ──────────────────────────────────────────
+// 内部数据模型
 
 private sealed class Block {
     data class Heading2(val text: String) : Block()
@@ -85,7 +84,7 @@ private sealed class Block {
     data object Empty : Block()
 }
 
-// ─── 解析器 ────────────────────────────────────────────────
+// 解析器
 
 private fun parseBlocks(lines: List<String>): List<Block> {
     val blocks = mutableListOf<Block>()
@@ -176,7 +175,7 @@ private fun parseBlocks(lines: List<String>): List<Block> {
     return blocks
 }
 
-// ─── 内联格式渲染 ──────────────────────────────────────────
+// 内联格式渲染
 
 private data class InlineToken(
     val type: InlineToken.Type,
@@ -235,7 +234,7 @@ private fun renderInline(text: String): androidx.compose.ui.text.AnnotatedString
     }
 }
 
-// ─── Block 级 Composable ──────────────────────────────────
+// Block 级 Composable
 
 @Composable
 private fun Heading2(text: String) {

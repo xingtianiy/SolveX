@@ -43,7 +43,7 @@ import com.tianhuiu.solvex.utils.DateTimeUtils
 import com.tianhuiu.solvex.utils.NotificationUtils
 
 /**
- * 侧边抽屉视图：显示解析详情。
+ * 侧边抽屉视图
  */
 @Composable
 fun DrawerView(
@@ -79,102 +79,98 @@ fun DrawerView(
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (item != null) {
-                val scrollState = rememberScrollState()
+                    val scrollState = rememberScrollState()
 
-                LaunchedEffect(item.query, item.result, autoScroll) {
-                    if (autoScroll) {
-                        scrollState.animateScrollTo(scrollState.maxValue)
+                    LaunchedEffect(item.query, item.result, autoScroll) {
+                        if (autoScroll) {
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                        }
                     }
-                }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (showMetadata) {
-                        val timeStr = DateTimeUtils.formatFull(item.timestamp)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (showMetadata) {
+                            val timeStr = DateTimeUtils.formatFull(item.timestamp)
 
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                )
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        MetadataRow(
+                                            icon = Icons.Default.Schedule,
+                                            label = "时间",
+                                            value = timeStr
+                                        )
+                                        StatusBadge(item.status)
+                                    }
                                     MetadataRow(
-                                        icon = Icons.Default.Schedule,
-                                        label = "时间",
-                                        value = timeStr
+                                        icon = Icons.Default.Face,
+                                        label = "助手",
+                                        value = item.assistantName ?: "默认"
                                     )
-                                    StatusBadge(item.status)
                                 }
-                                MetadataRow(
-                                    icon = Icons.Default.Face,
-                                    label = "助手",
-                                    value = item.assistantName ?: "默认"
-                                )
                             }
                         }
-                    }
 
-                    val sections = remember(item.result) {
-                        MarkdownParser.parse(item.result)
-                    }
-
-                    val isQueryPlaceholder = item.query == "思考中..." || item.query.isBlank()
-                    val isResultPlaceholder =
-                        sections.all { it.title.isEmpty() && (it.content == "思考中..." || it.content.isBlank()) }
-
-                    // 1. 如果还在提取阶段（Query 还是占位符），显示大加载动画
-                    if (item.status == AnalysisStatus.PROCESSING && isQueryPlaceholder) {
-                        LoadingState("正在提取内容...")
-                    } else {
-                        // 2. 显示提取出的内容（只要不是占位符）
-                        if (!isQueryPlaceholder) {
-                            val isStructured = remember(item.query) {
-                                item.query.contains("{") && item.query.contains("}")
-                            }
-
-                            DetailSection(
-                                title = if (isStructured) "解析问题" else "提取内容",
-                                content = NotificationUtils.renderStructuredQuestion(item.query),
-                                badgeText = AutomationTools.extractQuestionType(item.query)
-                            )
+                        val sections = remember(item.result) {
+                            MarkdownParser.parse(item.result)
                         }
 
-                        // 3. 如果提取完了但在生成解答阶段（Result 还是占位符），显示小加载动画
-                        if (item.status == AnalysisStatus.PROCESSING && isResultPlaceholder) {
-                            LoadingState("AI 正在分析中...")
-                        } else if (item.status != AnalysisStatus.CANCELLED) {
-                            // 4. 显示解答内容（已取消任务不显示部分结果）
-                            sections.forEachIndexed { index, section ->
+                        val isQueryPlaceholder = item.query == "正在思考中..." || item.query.isBlank()
+                        val isResultPlaceholder =
+                            sections.all { it.title.isEmpty() && (it.content == "正在思考中..." || it.content.isBlank()) }
+
+                        if (item.status == AnalysisStatus.PROCESSING && isQueryPlaceholder) {
+                            LoadingState("正在提取内容...")
+                        } else {
+                            if (!isQueryPlaceholder) {
+                                val isStructured = remember(item.query) {
+                                    item.query.contains("{") && item.query.contains("}")
+                                }
+
                                 DetailSection(
-                                    title = section.title,
-                                    content = section.content,
-                                    isPrimary = index == sections.lastIndex
+                                    title = if (isStructured) "解析问题" else "提取内容",
+                                    content = NotificationUtils.renderStructuredQuestion(item.query),
+                                    badgeText = AutomationTools.extractQuestionType(item.query)
                                 )
                             }
-                        }
-                    }
 
-                    Spacer(Modifier.height(24.dp))
-                }
+                            if (item.status == AnalysisStatus.PROCESSING && isResultPlaceholder) {
+                                LoadingState("AI 正在分析中...")
+                            } else if (item.status != AnalysisStatus.CANCELLED) {
+                                sections.forEachIndexed { index, section ->
+                                    DetailSection(
+                                        title = section.title,
+                                        content = section.content,
+                                        isPrimary = index == sections.lastIndex
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(24.dp))
+                    }
                 }
                 LoadingOverlay(
                     isLoading = item == null,
-                    message = "加载解析数据中"
+                    message = "加载解析数据中..."
                 )
             }
         }

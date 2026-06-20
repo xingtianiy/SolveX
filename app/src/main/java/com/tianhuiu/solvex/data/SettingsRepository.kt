@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.tianhuiu.solvex.data.models.AppConfig
@@ -15,19 +17,16 @@ import kotlinx.serialization.json.Json
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 /**
- * 设置仓库。
+ * 设置仓库
  */
 class SettingsRepository(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
     private val APP_CONFIG_KEY = stringPreferencesKey("app_config")
-    private val LAST_UPDATE_CHECK_KEY =
-        androidx.datastore.preferences.core.longPreferencesKey("last_update_check")
-    private val LAUNCH_COUNT_KEY =
-        androidx.datastore.preferences.core.intPreferencesKey("launch_count")
+    private val LAST_UPDATE_CHECK_KEY = longPreferencesKey("last_update_check")
+    private val LAUNCH_COUNT_KEY = intPreferencesKey("launch_count")
     private val UPDATE_ETAG_KEY = stringPreferencesKey("update_etag")
     private val CACHED_VERSION_KEY = stringPreferencesKey("cached_version")
-    private val CONSECUTIVE_NO_UPDATE_KEY =
-        androidx.datastore.preferences.core.intPreferencesKey("consecutive_no_update")
+    private val CONSECUTIVE_NO_UPDATE_KEY = intPreferencesKey("consecutive_no_update")
 
     val appConfigFlow: Flow<AppConfig> = context.dataStore.data.map { preferences ->
         val jsonStr = preferences[APP_CONFIG_KEY]

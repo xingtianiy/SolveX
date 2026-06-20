@@ -1,7 +1,7 @@
 # SolveX — 智能屏幕解析助手
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.9--alpha-orange)](version.json)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha-orange)](version.json)
 
 SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球交互、多引擎截屏、大语言模型流式响应，为用户提供即时的题目解答、内容分析和知识辅助。
 

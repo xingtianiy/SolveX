@@ -5,7 +5,7 @@ import com.tianhuiu.solvex.ui.MainViewModel
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 /**
- * 全局 Application 类：初始化依赖注入容器（AppContainer）。
+ * 全局 Application 类
  */
 class SolveXApplication : Application() {
     internal lateinit var container: AppContainer

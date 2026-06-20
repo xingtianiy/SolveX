@@ -46,11 +46,20 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     var showDialogManually by mutableStateOf(false)
         private set
 
+    // 当前会话中是否已关闭弹窗
+    var isDismissedInSession by mutableStateOf(false)
+        private set
+
+    // 是否为刚刚检查出的更新（用于控制推荐更新的自动弹窗）
+    var isFreshUpdate by mutableStateOf(false)
+        private set
+
     /**
      * 启动时恢复缓存更新信息，按策略检测更新。
      */
     fun initialize() {
         viewModelScope.launch {
+            isFreshUpdate = false
             repository.cachedVersionFlow.first()?.let { cachedJson ->
                 updateManager.parseCachedVersion(cachedJson)?.let { cachedInfo ->
                     if (cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
@@ -58,15 +67,10 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             }
-
             val lastCheck = repository.lastUpdateCheckFlow.first()
             val now = System.currentTimeMillis()
             val isCriticalPending = updateInfo?.updateLevel == UpdateLevel.CRITICAL
-
-            val intervalMillis = when {
-                isCriticalPending -> 0L
-                else -> 0L 
-            }
+            val intervalMillis = if (isCriticalPending) 0L else TimeUnit.DAYS.toMillis(1)
 
             if (now - lastCheck >= intervalMillis) {
                 checkForUpdates(manual = false)
@@ -82,6 +86,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             if (manual) {
                 isCheckingUpdate = true
                 showDialogManually = true
+                isDismissedInSession = false
             }
 
             val savedEtag = repository.updateEtagFlow.first()
@@ -95,8 +100,11 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
 
                     if (info.versionCode > BuildConfig.VERSION_CODE) {
                         updateInfo = info
+                        isFreshUpdate = true
+                        isDismissedInSession = false
                         repository.saveConsecutiveNoUpdate(0)
                     } else {
+                        updateInfo = null
                         repository.saveConsecutiveNoUpdate(
                             (repository.consecutiveNoUpdateFlow.first()) + 1
                         )
@@ -111,6 +119,10 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                         repository.saveConsecutiveNoUpdate(
                             (repository.consecutiveNoUpdateFlow.first()) + 1
                         )
+                        if (updateInfo != null && updateInfo!!.versionCode > BuildConfig.VERSION_CODE) {
+                            isFreshUpdate = true
+                        }
+
                         if (manual) SystemUtils.showToast(getApplication(), "当前已是最新版本")
                         return@launch
                     }
@@ -121,7 +133,9 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                             val cachedInfo = updateManager.parseCachedVersion(cachedJson)
                             if (cachedInfo != null && cachedInfo.versionCode > BuildConfig.VERSION_CODE) {
                                 updateInfo = cachedInfo
-                                SystemUtils.showToast(getApplication(), "网络不可用，显示上次缓存的更新信息")
+                                isFreshUpdate = true
+                                isDismissedInSession = false
+                                SystemUtils.showToast(getApplication(), "网络不可用，请稍后再试")
                                 return@launch
                             }
                         }
@@ -152,17 +166,12 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 关闭更新弹窗（仅非强制更新可关闭）。
+     * 关闭更新弹窗。
      */
     fun dismissUpdateDialog() {
         if (updateInfo?.isDismissible != true) return
         showDialogManually = false
-        if (updateInfo?.updateLevel == UpdateLevel.RECOMMENDED) {
-            viewModelScope.launch {
-                repository.saveLastUpdateCheck(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(6))
-            }
-        }
-        updateInfo = null
+        isDismissedInSession = true
         downloadStatus = DownloadStatus.Idle
     }
 }

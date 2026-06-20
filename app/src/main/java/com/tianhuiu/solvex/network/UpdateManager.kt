@@ -198,8 +198,9 @@ class UpdateManager(
                             output.write(buffer, 0, bytesRead)
                             totalRead += bytesRead
                             if (totalBytes > 0) {
-                                val progress = ((totalRead * 100) / totalBytes).toInt()
-                                if (progress != lastProgress) {
+                                val progress = ((totalRead * 100) / totalBytes).toInt().coerceIn(0, 100)
+                                // 只有进度增加时才发出更新，防止回闪
+                                if (progress > lastProgress) {
                                     emit(DownloadStatus.Downloading(progress))
                                     lastProgress = progress
                                 }

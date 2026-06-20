@@ -1,6 +1,7 @@
 package com.tianhuiu.solvex.mode
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.tianhuiu.solvex.data.models.DrawerSide
 import kotlinx.serialization.Serializable
 
 // 模式统一契约
@@ -9,13 +10,8 @@ interface Mode {
     val displayName: String
     val description: String
     val icon: ImageVector
-
-    // [MainService.kt:142] 仅常规模式触发裁剪
     val shouldCrop: Boolean
-
-    // [ProcessingPipeline.kt:284] 仅自动模式有此要求
     val requiresAutomationAction: Boolean
-
     fun defaultConfig(): ModeConfig
 }
 
@@ -25,6 +21,7 @@ data class ModeConfig(
     val allowNotification: Boolean = true,
     val showFloatingToast: Boolean = true,
     val autoOpenDrawer: Boolean = true,
+    val drawerSide: DrawerSide = DrawerSide.LEFT,
     val enableCrop: Boolean? = null,
     val ocrProviderId: String? = null,
     val ocrModel: String? = null,

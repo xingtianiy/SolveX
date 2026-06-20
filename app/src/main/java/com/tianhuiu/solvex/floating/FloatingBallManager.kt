@@ -45,7 +45,6 @@ class FloatingBallManager(private val context: Context) {
         flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-        // 通过反射调用 setTrustedOverlay，确保悬浮窗在 Android 14+ 上不被覆盖
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             try {
                 WindowManager.LayoutParams::class.java
@@ -85,10 +84,6 @@ class FloatingBallManager(private val context: Context) {
 
     private val handler = Handler(Looper.getMainLooper())
 
-    /**
-     * 隐匿模式激活时，自动恢复的默认状态应为 LOW_PROFILE 而非 IDLE。
-     * 由 MainService 在开启/关闭隐匿模式时设置。
-     */
     var defaultIdleStatus: BallStatus = BallStatus.IDLE
 
     private val hideRunnable = Runnable {
@@ -125,6 +120,7 @@ class FloatingBallManager(private val context: Context) {
                     isAtLeftEdge = isAtLeftEdge,
                     ballText = ballText,
                     ballFullSizeDp = ballFullSizeDp,
+                    isStealthMode = defaultIdleStatus == BallStatus.LOW_PROFILE
                 )
             }
 
@@ -217,7 +213,6 @@ class FloatingBallManager(private val context: Context) {
         status = newStatus
         if ((newStatus == BallStatus.SUCCESS) || (newStatus == BallStatus.ERROR)) {
             handler.removeCallbacks(hideRunnable)
-            // 结果显示 5 秒后执行清理
             handler.postDelayed({
                 status = defaultIdleStatus
                 ballText = null

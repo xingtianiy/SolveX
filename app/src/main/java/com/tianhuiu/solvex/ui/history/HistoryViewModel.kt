@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tianhuiu.solvex.SolveXApplication
+import com.tianhuiu.solvex.data.models.AnalysisStatus
 import com.tianhuiu.solvex.data.models.HistoryItem
 import com.tianhuiu.solvex.utils.FileUtils
 import kotlinx.coroutines.Dispatchers
@@ -29,13 +30,17 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     // 当前显示条数
     private val visibleCount = MutableStateFlow(20)
 
-    // 分页流
+    // 分页流（过滤重复的 PROCESSING 占位记录，只保留最新一条）
     val historyItems: StateFlow<List<HistoryItem>> =
         combine(allItemsFlow, visibleCount) { items, count ->
-            items.take(count)
+            val newestProcessingIndex = items.indexOfFirst { it.status == AnalysisStatus.PROCESSING }
+            val filtered = items.filterIndexed { index, item ->
+                !(item.status == AnalysisStatus.PROCESSING && index != newestProcessingIndex)
+            }
+            filtered.take(count)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // 全局总数统计：不受分页限制
+    // 全局总数统计
     val totalCount: StateFlow<Int> = repository.getHistoryCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 

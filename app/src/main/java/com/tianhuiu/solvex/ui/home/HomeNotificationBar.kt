@@ -28,7 +28,7 @@ import com.tianhuiu.solvex.data.models.InAppNotification
 import com.tianhuiu.solvex.data.models.NotificationType
 
 /**
- * 首页通知栏：显示服务运行状态和新手指引。
+ * 首页通知栏
  */
 @Composable
 fun StatusBar(

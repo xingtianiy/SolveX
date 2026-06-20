@@ -42,6 +42,9 @@ interface HistoryDao {
         result: String
     )
 
+    @Query("DELETE FROM history_items WHERE `status` = 'PROCESSING'")
+    suspend fun deleteProcessingItems()
+
     @Query("DELETE FROM history_items")
     suspend fun clearHistory()
 }

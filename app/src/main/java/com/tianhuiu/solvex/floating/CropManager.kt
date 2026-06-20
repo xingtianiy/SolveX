@@ -17,7 +17,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 /**
- * 裁剪管理器：负责裁剪 WindowManager 挂载，暂停处理流直到用户完成裁剪或取消。
+ * 裁剪管理器
  */
 class CropManager(private val context: Context) {
 
@@ -46,9 +46,6 @@ class CropManager(private val context: Context) {
         height = WindowManager.LayoutParams.MATCH_PARENT
     }
 
-    /**
-     * 显示裁剪界面并挂起，返回裁剪后的 Bitmap 或 null（取消时）。
-     */
     suspend fun crop(bitmap: Bitmap): Bitmap? = suspendCancellableCoroutine { cont ->
         show(
             bitmap,
@@ -93,9 +90,6 @@ class CropManager(private val context: Context) {
         windowManager.addView(composeView, layoutParams)
     }
 
-    /**
-     * 更新防截屏标志。
-     */
     fun updateSecureFlag(enabled: Boolean) {
         val currentFlags = layoutParams.flags
         val newFlags = if (enabled) {

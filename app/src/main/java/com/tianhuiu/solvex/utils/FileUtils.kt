@@ -9,7 +9,7 @@ import kotlin.math.log10
 import kotlin.math.pow
 
 /**
- * 文件操作工具类：负责图片的内部存储、空间统计及格式化。
+ * 文件操作工具类
  */
 object FileUtils {
     /**
@@ -44,7 +44,7 @@ object FileUtils {
     }
 
     /**
-     * 将字节大小格式化为人类可读的字符串（例如：1.5 MB）。
+     * 将字节大小格式化为可读的字符串。
      */
     fun formatFileSize(size: Long): String {
         if (size <= 0) return "0 B"

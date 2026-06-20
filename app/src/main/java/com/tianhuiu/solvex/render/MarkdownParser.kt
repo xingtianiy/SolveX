@@ -6,7 +6,7 @@ data class Section(
     val content: String,
 )
 
-// Markdown 解析器：识别 ### 标题作为模块分隔符
+// Markdown 解析器
 object MarkdownParser {
     private val headingRegex = Regex("(?m)^### (.+)$")
 

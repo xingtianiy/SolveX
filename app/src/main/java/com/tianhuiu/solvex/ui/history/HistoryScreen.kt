@@ -73,7 +73,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
- * 历史记录列表屏幕：支持分页加载和长按删除。
+ * 历史记录列表屏幕
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,8 +104,6 @@ fun HistoryScreen(
 
     val listState = rememberLazyListState()
 
-    // 首次加载及搜索切换时强制置顶
-    // 使用 rememberSaveable 确保从详情页返回或切换标签页时保留此状态
     var isInitialScrollDone by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(historyItems.isNotEmpty(), searchQuery) {
         if (historyItems.isNotEmpty()) {
@@ -116,8 +114,6 @@ fun HistoryScreen(
         }
     }
 
-    // 自动置顶逻辑：仅当有新任务产生、或最新的任务状态变为 PROCESSING/COMPLETED 时滚动
-    // 使用 remember (非 saveable) 记录上一次状态，页面重创(返回)时会重置为当前值，从而跳过首次触发
     val latestItem = historyItems.firstOrNull()
     var prevLatestId by remember { mutableStateOf(latestItem?.id) }
     var prevLatestStatus by remember { mutableStateOf(latestItem?.status) }
@@ -131,9 +127,6 @@ fun HistoryScreen(
             val isSuccess =
                 latestItem.status == com.tianhuiu.solvex.data.models.AnalysisStatus.SUCCESS
 
-            // 触发条件：
-            // 1. 这是一个新生成的任务 (id变了)
-            // 2. 最新的任务状态变为了 PROCESSING 或 SUCCESS (且之前不是这个状态)
             if (isNewItem || (statusChanged && (isProcessing || isSuccess))) {
                 if (autoScroll) {
                     listState.animateScrollToItem(0)
@@ -297,7 +290,7 @@ private fun resolveModeDisplayName(modeId: String): String {
 }
 
 /**
- * 历史记录卡片：支持长按触发删除。
+ * 历史记录卡片
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

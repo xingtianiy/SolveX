@@ -1,5 +1,6 @@
 package com.tianhuiu.solvex.ui.settings
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,9 +31,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tianhuiu.solvex.data.models.DrawerSide
 import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.ModelSelectorItem
+import com.tianhuiu.solvex.ui.components.SettingBadge
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 
@@ -66,6 +70,8 @@ fun ModeSettingsScreen(
         ) {
             item {
                 SettingsGroup(title = "模型配置") {
+                    val defaultUnset = viewModel.defaultProviderId.isNullOrBlank()
+                    
                     ModelSelectorItem(
                         label = "OCR 模型",
                         icon = Icons.Default.TextFields,
@@ -79,7 +85,10 @@ fun ModeSettingsScreen(
                                 config.copy(ocrProviderId = pid, ocrModel = model)
                             )
                         },
-                        defaultProviderId = viewModel.defaultProviderId
+                        defaultProviderId = viewModel.defaultProviderId,
+                        badge = if (defaultUnset && config.ocrProviderId.isNullOrBlank()) {
+                            { SettingBadge(text = "未配置") }
+                        } else null
                     )
                     ModelSelectorItem(
                         label = "文本分析模型",
@@ -94,7 +103,10 @@ fun ModeSettingsScreen(
                                 config.copy(textProviderId = pid, textModel = model)
                             )
                         },
-                        defaultProviderId = viewModel.defaultProviderId
+                        defaultProviderId = viewModel.defaultProviderId,
+                        badge = if (defaultUnset && config.textProviderId.isNullOrBlank()) {
+                            { SettingBadge(text = "未配置") }
+                        } else null
                     )
                     ModelSelectorItem(
                         label = "多模态模型",
@@ -109,7 +121,10 @@ fun ModeSettingsScreen(
                                 config.copy(visionProviderId = pid, visionModel = model)
                             )
                         },
-                        defaultProviderId = viewModel.defaultProviderId
+                        defaultProviderId = viewModel.defaultProviderId,
+                        badge = if (defaultUnset && config.visionProviderId.isNullOrBlank()) {
+                            { SettingBadge(text = "未配置") }
+                        } else null
                     )
                 }
             }
@@ -172,6 +187,25 @@ fun ModeSettingsScreen(
                                     viewModel.updateModeConfig(config.copy(autoOpenDrawer = it))
                                 }
                             )
+                        }
+                    )
+                    SettingsItem(
+                        label = "抽屉弹出位置",
+                        subLabel = "选择侧边抽屉的弹出方向",
+                        icon = Icons.AutoMirrored.Filled.ViewSidebar,
+                        trailing = {
+                            Row {
+                                DrawerSide.entries.forEach { side ->
+                                    FilterChip(
+                                        selected = config.drawerSide == side,
+                                        onClick = {
+                                            viewModel.updateModeConfig(config.copy(drawerSide = side))
+                                        },
+                                        label = { Text(side.displayName) },
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
+                                }
+                            }
                         }
                     )
                     SettingsItem(

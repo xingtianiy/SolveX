@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * 封装 MediaProjection 录屏接口的引擎实现。
+ * MediaProjection 录屏接口的引擎实现。
  */
 class SystemCaptureEngine(
     private val context: Context,
@@ -116,10 +116,8 @@ class SystemCaptureEngine(
 
         val reader = imageReader ?: return@withContext null
 
-        // Android 14+ 某些设备 acquireNextImage 可能会较慢或需要 acquireLatestImage
         val image = withTimeoutOrNull(500L) {
             var img = reader.acquireLatestImage()
-            // 如果最新帧不可用，尝试等待下一帧
             if (img == null) {
                 delay(50)
                 img = reader.acquireNextImage()

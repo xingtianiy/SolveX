@@ -112,6 +112,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var currentModeConfig by mutableStateOf(ModeConfig())
         private set
 
+    var allModeConfigs by mutableStateOf(emptyMap<String, ModeConfig>())
+        private set
+
     var defaultProviderId by mutableStateOf<String?>(null)
         private set
 
@@ -241,6 +244,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     selectedEngine = config.selectedEngine
                     selectedModeId = config.selectedModeId
                     currentModeConfig = config.currentModeConfig()
+                    allModeConfigs = config.modeConfigs
                     defaultProviderId = config.defaultProviderId
                     autoScrollContent = config.autoScrollContent
                     checkPermissions()
@@ -273,7 +277,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 AdbCommandHelper.grantWriteSecureSettings(ctx)
                 AdbCommandHelper.enableAccessibilityService(ctx)
                 // 延迟后刷新权限状态，确保 settings 命令生效
-                delay(500)
+                delay(1000)
                 checkPermissions()
             }
         }
@@ -313,7 +317,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     selectedAssistantId = selectedAssistantId,
                     selectedEngine = selectedEngine,
                     selectedModeId = selectedModeId,
-                    modeConfigs = mapOf(selectedModeId to currentModeConfig),
+                    modeConfigs = allModeConfigs.toMutableMap().apply {
+                        put(selectedModeId, currentModeConfig)
+                    },
                     autoScrollContent = autoScrollContent
                 )
             )
@@ -392,6 +398,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateModeConfig(config: ModeConfig) {
         currentModeConfig = config
+        allModeConfigs = allModeConfigs.toMutableMap().apply {
+            put(selectedModeId, config)
+        }
         save()
     }
 

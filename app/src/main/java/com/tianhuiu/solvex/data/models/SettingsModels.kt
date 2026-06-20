@@ -76,14 +76,13 @@ data class DrawerSettings(
  */
 @Serializable
 data class PermissionSettings(
-    val allowNotificationNormal: Boolean = true,
-    val allowNotificationAuto: Boolean = true,
     val enableAutoHideBall: Boolean = true,
     val captureMode: String = CaptureMode.SYSTEM,
     val drawerSettings: DrawerSettings = DrawerSettings(),
     val ballFullSizeDp: Float = 42f,
     val enableScreenProtection: Boolean = false,
     val enableStealthMode: Boolean = false,
+    val hasShownStealthWarning: Boolean = false,
     val isFirstLaunchSetupComplete: Boolean = false,
 )
 

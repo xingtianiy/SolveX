@@ -100,7 +100,7 @@ object NotificationUtils {
     fun renderStructuredQuestion(rawText: String): String {
         val structured = AutomationTools.parseStructuredQuestion(rawText) ?: return rawText
 
-        return buildString {
+        val content = buildString {
             if (!structured.question.isNullOrBlank()) {
                 append("${structured.question}\n\n")
             }
@@ -114,11 +114,12 @@ object NotificationUtils {
                 append("> **图片补充分析**：${structured.image_analysis}\n")
             }
         }.trim()
+
+        return content.ifBlank { "（内容提取为空，请检查截图或重试）" }
     }
 
     /**
      * 从提取的文本中解析题型和题目主体。
-     * 期望格式：【题型】题目内容...
      */
     fun parseQuestionInfo(extractedText: String?): Pair<String, String> {
         if (extractedText.isNullOrBlank()) return "解析问题" to "已获取题目内容"
@@ -143,7 +144,7 @@ object NotificationUtils {
     }
 
     /**
-     * 发送一条解析结果系统通知，包含标题、内容及"查看"按钮。
+     * 发送一条解析结果系统通知
      */
     fun sendResultNotification(
         context: Context,

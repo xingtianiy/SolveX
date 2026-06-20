@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * 历史记录仓库：基于 Room 数据库存储历史解析条目。
+ * 历史记录仓库
  */
 class HistoryRepository(private val historyDao: HistoryDao) {
 
@@ -26,6 +26,10 @@ class HistoryRepository(private val historyDao: HistoryDao) {
 
     suspend fun addHistoryItem(item: HistoryItem) {
         historyDao.insertHistoryItem(item)
+    }
+
+    suspend fun deleteProcessingItems() {
+        historyDao.deleteProcessingItems()
     }
 
     suspend fun clearHistory() {

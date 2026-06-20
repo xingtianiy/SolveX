@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- 网络权限 -->
+    <!--网络权限-->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 通知权限 -->
+    <!--通知权限-->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- 震动权限 -->
+    <!--震动权限-->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 前台服务 -->
     <uses-permission
@@ -13,27 +13,27 @@
         tools:ignore="ForegroundServicesPolicy" />
     <!--媒体投影权限-->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <!-- 数据同步前台服务权限 -->
+    <!--数据同步前台服务权限-->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- 悬浮窗权限 -->
+    <!--悬浮窗权限-->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- 安装包权限 -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+    <!--安装包权限-->
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES"
         tools:ignore="RequestInstallPackagesPolicy" />
-    <!-- 修改安全设置权限（通过 Shizuku 自动授予） -->
+    <!--修改安全设置权限-->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
-    <!-- Shizuku 绑定权限 -->
-    <uses-permission android:name="rikka.shizuku.permission.BIND_USER_SERVICE" />
-    <!-- 忽略电池优化权限 -->
+    <!--忽略电池优化权限-->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-
+    <!-- Shizuku -->
+    <uses-permission android:name="rikka.shizuku.permission.BIND_USER_SERVICE" />
+    <!-- 外部应用查询 -->
     <queries>
         <package android:name="dev.rikka.shizuku" />
         <package android:name="moe.shizuku.privileged.api" />
     </queries>
-
     <application
         android:name=".SolveXApplication"
         android:allowBackup="true"
@@ -44,6 +44,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SolveX">
+        <!-- 主界面 -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -52,20 +53,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
+        <!-- 主服务 -->
         <service
             android:name=".service.MainService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="shortService|mediaProjection|dataSync" />
-
+        <!-- Shizuku -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
             android:enabled="true"
             android:exported="true"
             android:multiprocess="false" />
-
+        <!-- 无障碍服务 -->
         <service
             android:name=".service.SolveXAccessibilityService"
             android:exported="true"
@@ -78,7 +79,7 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-
+        <!-- 文件共享 -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -89,5 +90,4 @@
                 android:resource="@xml/file_paths" />
         </provider>
     </application>
-
 </manifest>

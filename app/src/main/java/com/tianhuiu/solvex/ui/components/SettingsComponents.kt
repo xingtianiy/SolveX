@@ -182,7 +182,8 @@ fun ModelSelectorItem(
     onModelSelected: (String?, String?) -> Unit,
     type: String = "text", // "ocr", "text", "vision"
     onFetchModels: suspend (String) -> List<String> = { emptyList() },
-    defaultProviderId: String? = null
+    defaultProviderId: String? = null,
+    badge: @Composable (() -> Unit)? = null
 ) {
     var showDialog by remember { mutableStateOf(value = false) }
     val scope = rememberCoroutineScope()
@@ -213,6 +214,7 @@ fun ModelSelectorItem(
         subLabel = subLabel,
         icon = icon,
         onClick = { showDialog = true },
+        badge = badge,
         trailing = {
             Icon(
                 Icons.Default.ChevronRight,

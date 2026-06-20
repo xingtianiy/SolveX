@@ -5,6 +5,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -25,6 +27,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tianhuiu.solvex.data.models.UpdateLevel
+import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.UpdateDialog
 import com.tianhuiu.solvex.ui.history.HistoryDetailScreen
@@ -70,8 +73,13 @@ fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
 
         // 软件更新弹窗
         updateViewModel.updateInfo?.let { info ->
-            // 如果是 OPTIONAL 等级，只有在手动检查时才弹出弹窗，否则仅显示红点（静默提示）
-            if (info.updateLevel != UpdateLevel.OPTIONAL || updateViewModel.showDialogManually) {
+            val shouldShowDialog = when (info.updateLevel) {
+                UpdateLevel.CRITICAL -> true
+                UpdateLevel.RECOMMENDED -> (updateViewModel.isFreshUpdate || updateViewModel.showDialogManually) && !updateViewModel.isDismissedInSession
+                UpdateLevel.OPTIONAL -> updateViewModel.showDialogManually && !updateViewModel.isDismissedInSession
+            }
+
+            if (shouldShowDialog) {
                 UpdateDialog(
                     info = info,
                     downloadStatus = updateViewModel.downloadStatus,
@@ -106,8 +114,32 @@ fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
                 if (showBottomBar) {
                     NavigationBar {
                         items.forEach { screen ->
+                            val hasSettingsBadge = screen == Screen.Settings && run {
+                                val updateBadge = updateViewModel.updateInfo != null
+                                val permissionBadge = !viewModel.isAllPermissionsReady
+                                val providerBadge = viewModel.providers.all { it.apiKey.isBlank() }
+                                val modeBadge = ModeRegistry.all.any { mode ->
+                                    val config = viewModel.allModeConfigs[mode.id] ?: mode.defaultConfig()
+                                    config.ocrProviderId.isNullOrBlank() && 
+                                    config.textProviderId.isNullOrBlank() && 
+                                    config.visionProviderId.isNullOrBlank() &&
+                                    viewModel.defaultProviderId.isNullOrBlank()
+                                }
+                                updateBadge || permissionBadge || providerBadge || modeBadge
+                            }
+
                             NavigationBarItem(
-                                icon = { Icon(screen.icon, contentDescription = null) },
+                                icon = {
+                                    BadgedBox(
+                                        badge = {
+                                            if (hasSettingsBadge) {
+                                                Badge()
+                                            }
+                                        }
+                                    ) {
+                                        Icon(screen.icon, contentDescription = null)
+                                    }
+                                },
                                 label = { Text(screen.label) },
                                 selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                                 onClick = {
@@ -125,7 +157,6 @@ fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
                 }
             }
         ) { innerPadding ->
-            // 处理通知"查看"按钮的深度链接跳转
             val deepLinkId = viewModel.deepLinkHistoryId
             LaunchedEffect(deepLinkId) {
                 deepLinkId?.let { id ->

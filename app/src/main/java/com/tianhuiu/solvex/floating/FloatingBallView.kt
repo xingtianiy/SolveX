@@ -41,13 +41,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 /**
- * 悬浮球视图：负责渲染不同状态、答案内容。支持超长文本自动横向滚动。
+ * 悬浮球视图
  */
 const val BALL_HIDDEN_RATIO = 0.35f
 
-/**
- * 悬浮球组件 UI 实现。
- */
 @Composable
 fun FloatingBallView(
     status: BallStatus,
@@ -55,6 +52,7 @@ fun FloatingBallView(
     isAtLeftEdge: Boolean,
     ballText: String? = null,
     ballFullSizeDp: Float = 40f,
+    isStealthMode: Boolean = false,
 ) {
     // 可配置尺寸
     val baseSize =
@@ -98,13 +96,26 @@ fun FloatingBallView(
         BallStatus.PROTECTED -> Color(0xFFFFA726)
     }
 
-    val finalAlpha = when (status) {
-        BallStatus.PROTECTED -> if (displayMode == BallDisplayMode.FULL) 0.6f else 0.2f
-        BallStatus.LOW_PROFILE -> if (displayMode == BallDisplayMode.FULL) 0.3f else 0.15f
-        BallStatus.ERROR -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.8f
-        BallStatus.SUCCESS -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.6f
-        BallStatus.RUNNING -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.55f
-        BallStatus.IDLE -> if (displayMode == BallDisplayMode.FULL) 1f else 0.4f
+    val finalAlpha = if (isStealthMode) {
+        // 隐匿模式下的透明度策略：整体大幅降低可见度
+        when (status) {
+            BallStatus.PROTECTED -> if (displayMode == BallDisplayMode.FULL) 0.45f else 0.15f
+            BallStatus.LOW_PROFILE -> if (displayMode == BallDisplayMode.FULL) 0.25f else 0.12f
+            BallStatus.ERROR -> if (displayMode == BallDisplayMode.FULL) 0.5f else 0.35f
+            BallStatus.SUCCESS -> if (displayMode == BallDisplayMode.FULL) 0.5f else 0.3f
+            BallStatus.RUNNING -> if (displayMode == BallDisplayMode.FULL) 0.55f else 0.35f
+            BallStatus.IDLE -> if (displayMode == BallDisplayMode.FULL) 0.4f else 0.2f
+        }
+    } else {
+        // 普通模式下的透明度
+        when (status) {
+            BallStatus.PROTECTED -> if (displayMode == BallDisplayMode.FULL) 0.6f else 0.2f
+            BallStatus.LOW_PROFILE -> if (displayMode == BallDisplayMode.FULL) 0.3f else 0.15f
+            BallStatus.ERROR -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.8f
+            BallStatus.SUCCESS -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.6f
+            BallStatus.RUNNING -> if (displayMode == BallDisplayMode.FULL) 1.0f else 0.55f
+            BallStatus.IDLE -> if (displayMode == BallDisplayMode.FULL) 1f else 0.4f
+        }
     }
 
     Box(

@@ -47,8 +47,6 @@ class AppConfigTest {
                 }
             ],
             "permissions": {
-                "allowNotificationNormal": true,
-                "allowNotificationAuto": false,
                 "enableAutoHideBall": true,
                 "captureMode": "system",
                 "drawerSettings": {
@@ -82,8 +80,6 @@ class AppConfigTest {
         assertEquals("逐步解答", config.assistants[0].textPrompt)
         assertEquals("分析图像并解答", config.assistants[0].visionPrompt)
 
-        assertTrue(config.permissions.allowNotificationNormal)
-        assertFalse(config.permissions.allowNotificationAuto)
         assertEquals(CaptureMode.SYSTEM, config.permissions.captureMode)
         assertEquals(DrawerSide.LEFT, config.permissions.drawerSettings.side)
 

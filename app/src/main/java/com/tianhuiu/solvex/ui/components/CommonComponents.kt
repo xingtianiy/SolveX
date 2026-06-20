@@ -182,12 +182,7 @@ fun SolveXConfirmDialog(
 }
 
 /**
- * 全屏加载遮罩：半透明背景 + 居中加载动画 + 可选文字。
- * 使用 [AnimatedVisibility] 实现平滑的进入/退出过渡。
- *
- * @param isLoading 是否显示加载状态
- * @param message 加载提示文字，默认"加载中..."
- * @param modifier 应用于外层 Box 的 Modifier
+ * 全屏加载遮罩
  */
 @Composable
 fun LoadingOverlay(

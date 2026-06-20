@@ -7,8 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Shizuku ADB 截屏引擎：通过 Shizuku 执行 screencap -p 命令截取屏幕。
- * 一次授权后无需每次弹窗确认。
+ * Shizuku ADB 截屏引擎。
  */
 class ShizukuCaptureEngine(private val context: Context) : ScreenCaptureEngine {
 

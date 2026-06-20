@@ -93,7 +93,7 @@ class DrawerManager(
             return
         }
 
-        val finalWidthPercent = 0.9f // 强制 90% 宽度
+        val finalWidthPercent = 0.9f
 
         composeView = ComposeView(context).apply {
             (context as? LifecycleOwner)?.let { setViewTreeLifecycleOwner(it) }
@@ -127,7 +127,7 @@ class DrawerManager(
                                 .fillMaxHeight()
                                 .fillMaxWidth(finalWidthPercent)
                                 .align(if (side == DrawerSide.LEFT) Alignment.CenterStart else Alignment.CenterEnd)
-                                .clickable(enabled = false) {} // 拦截点击
+                                .clickable(enabled = false) {}
                         ) {
                             DrawerView(
                                 item = displayItem,

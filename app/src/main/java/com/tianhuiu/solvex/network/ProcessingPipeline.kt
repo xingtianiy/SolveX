@@ -202,12 +202,21 @@ class ProcessingPipeline(
                 }
 
                 // 检查是否提取到了有效内容
-                if (extractedText.isBlank()) {
+                val isEffectivelyEmpty = if (models.assistant.useStructuredExtraction) {
+                    val structured = AutomationTools.parseStructuredQuestion(extractedText)
+                    structured == null || (structured.question.isNullOrBlank() && 
+                                          structured.options.isNullOrEmpty() && 
+                                          structured.image_analysis.isNullOrBlank())
+                } else {
+                    extractedText.isBlank()
+                }
+
+                if (isEffectivelyEmpty) {
                     summaryDeferred.await()
                     return@coroutineScope base.copy(
                         status = ProcessingStatus.FAILURE,
                         detail = "未发现可处理的有效内容，请确保截图包含清晰的信息",
-                        extractedText = "（未识别到内容）"
+                        extractedText = extractedText.ifBlank { "（未识别到内容）" }
                     )
                 }
 

@@ -2,6 +2,7 @@ package com.tianhuiu.solvex.ui.settings
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,12 +30,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tianhuiu.solvex.data.models.CaptureMode
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
+import com.tianhuiu.solvex.ui.components.SolveXDialog
+import com.tianhuiu.solvex.ui.components.TutorialContent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +48,7 @@ fun GeneralSettingsScreen(
 ) {
     var pendingMode by remember { mutableStateOf<String?>(null) }
     var showAccessibilityConfirm by remember { mutableStateOf(false) }
+    var showStealthModeWarning by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -201,23 +207,31 @@ fun GeneralSettingsScreen(
                         trailing = {
                             Switch(
                                 checked = viewModel.permissions.enableStealthMode && viewModel.isShizukuPermissionGranted,
-                                onCheckedChange = {
-                                    viewModel.updatePermissions(
-                                        viewModel.permissions.copy(
-                                            enableStealthMode = it
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        showStealthModeWarning = true
+                                    } else {
+                                        viewModel.updatePermissions(
+                                            viewModel.permissions.copy(
+                                                enableStealthMode = false
+                                            )
                                         )
-                                    )
+                                    }
                                 },
                                 enabled = viewModel.isShizukuPermissionGranted
                             )
                         },
                         onClick = {
                             if (viewModel.isShizukuPermissionGranted) {
-                                viewModel.updatePermissions(
-                                    viewModel.permissions.copy(
-                                        enableStealthMode = !viewModel.permissions.enableStealthMode
+                                if (!viewModel.permissions.enableStealthMode) {
+                                    showStealthModeWarning = true
+                                } else {
+                                    viewModel.updatePermissions(
+                                        viewModel.permissions.copy(
+                                            enableStealthMode = false
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                     )
@@ -300,6 +314,37 @@ fun GeneralSettingsScreen(
             dismissText = "取消",
             icon = Icons.Default.AccessibilityNew
         )
+    }
+
+    if (showStealthModeWarning) {
+        SolveXDialog(
+            onDismissRequest = { showStealthModeWarning = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStealthModeWarning = false
+                    viewModel.updatePermissions(
+                        viewModel.permissions.copy(enableStealthMode = true)
+                    )
+                }) {
+                    Text("确认开启", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStealthModeWarning = false }) {
+                    Text("取消")
+                }
+            },
+            title = "开启隐匿模式",
+            icon = Icons.Default.Warning
+        ) {
+            TutorialContent(
+                markdown = """
+                    开启后 SolveX 会实时监测当前屏幕。当探测到受保护的隐私应用时，将执行**防截屏保护**功能。
+                    > **提示**：隐匿模式会增加设备耗电。若遇系统卡顿请及时关闭。
+                """.trimIndent(),
+                modifier = Modifier.heightIn(max = 160.dp)
+            )
+        }
     }
 
     if (pendingMode != null) {

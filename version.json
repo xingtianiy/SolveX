@@ -1,13 +1,14 @@
 {
-  "versionCode": 9,
-  "versionName": "0.0.9-alpha",
-  "releaseDate": "2026-06-20",
-  "level": "optional",
+  "versionCode": 10,
+  "versionName": "0.1.0-alpha",
+  "releaseDate": "2026-06-21",
+  "level": "recommended",
   "apkSize": "19 MB",
   "updateLog": [
-    "优化隐私模式联动、完善更新机制以及重构设置页视觉引导",
-    "新增隐匿模式，优化监听提速、修复计数异常（实验性功能，未实测）"
+    "在设置页面和底部导航栏新增了徽章提醒，帮助新用户快速完成模型设置",
+    "现在可以自由设置侧边抽屉的弹出位置，并优化了裁剪工具，使用会更轻松地选取内容",
+    "修复了 AI 回复中题目内容重复显示的问题，解决了开启隐私模式可能导致部分设备的启动卡顿问题"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.0.9-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.0.9-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.1.0-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.1.0-alpha/app-release.apk"
 }

@@ -1,6 +1,9 @@
 package com.tianhuiu.solvex.ui.components
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -280,6 +284,10 @@ private fun MainButton(text: String, onClick: () -> Unit) {
 private fun DownloadProgress(progress: Int) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress / 100f,
+        animationSpec = if (progress == 0) snap() else spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "progress"
     )
 
@@ -290,7 +298,7 @@ private fun DownloadProgress(progress: Int) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                if (progress == 0) "正在切换源..." else "正在下载新版本...",
+                if (progress == 0) "正在尝试切换源..." else "正在高速下载中...",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -309,7 +317,8 @@ private fun DownloadProgress(progress: Int) {
                 .height(10.dp)
                 .clip(CircleShape),
             color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.primaryContainer
+            trackColor = MaterialTheme.colorScheme.primaryContainer,
+            strokeCap = StrokeCap.Round
         )
     }
 }
