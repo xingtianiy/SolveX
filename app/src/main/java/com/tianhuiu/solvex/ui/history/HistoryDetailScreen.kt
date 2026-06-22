@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -96,180 +96,191 @@ fun HistoryDetailScreen(
                 )
             }
         ) { padding ->
-            if (item != null) {
-                val currentItem = item!!
+            val currentItem = item
+            if (currentItem != null) {
                 key(itemId) {
-                    Column(
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding)
-                            .verticalScroll(rememberScrollState())
                     ) {
-                        val timeStr = DateTimeUtils.formatFull(currentItem.timestamp)
-
-                        // 元数据卡片
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                            ),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                        // 1. 元数据卡片
+                        item {
+                            val timeStr = DateTimeUtils.formatFull(currentItem.timestamp)
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                ),
+                                shape = RoundedCornerShape(16.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    MetadataRow(
-                                        icon = Icons.Default.Schedule,
-                                        label = "时间",
-                                        value = timeStr,
-                                        modifier = Modifier.weight(1f)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        MetadataRow(
+                                            icon = Icons.Default.Schedule,
+                                            label = "时间",
+                                            value = timeStr,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        StatusBadge(currentItem.status)
+                                    }
+
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(
+                                            alpha = 0.5f
+                                        )
                                     )
-                                    StatusBadge(currentItem.status)
+
+                                    Row(modifier = Modifier.fillMaxWidth()) {
+                                        MetadataRow(
+                                            icon = Icons.Default.Face,
+                                            label = "智能助手",
+                                            value = currentItem.assistantName?.ifBlank { null }
+                                                ?: "默认助手",
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        MetadataRow(
+                                            icon = Icons.Default.AutoAwesome,
+                                            label = "识别引擎",
+                                            value = currentItem.engineName?.ifBlank { null } ?: "未知",
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+
+                                    MetadataRow(
+                                        icon = Icons.Default.Memory,
+                                        label = "调用模型",
+                                        value = currentItem.modelName?.ifBlank { null }
+                                            ?: "未配置默认模型"
+                                    )
                                 }
-
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(
-                                        alpha = 0.5f
-                                    )
-                                )
-
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    MetadataRow(
-                                        icon = Icons.Default.Face,
-                                        label = "智能助手",
-                                        value = currentItem.assistantName?.ifBlank { null }
-                                            ?: "默认助手",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    MetadataRow(
-                                        icon = Icons.Default.AutoAwesome,
-                                        label = "识别引擎",
-                                        value = currentItem.engineName?.ifBlank { null } ?: "未知",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-
-                                MetadataRow(
-                                    icon = Icons.Default.Memory,
-                                    label = "调用模型",
-                                    value = currentItem.modelName?.ifBlank { null }
-                                        ?: "未配置默认模型"
-                                )
                             }
                         }
 
-                        // 截图展示
+                        // 2. 截图展示
                         currentItem.imagePath?.let { path ->
                             val file = File(path)
                             if (file.exists()) {
-                                val bitmap by produceState<android.graphics.Bitmap?>(null, path) {
-                                    value = withContext(Dispatchers.IO) {
-                                        BitmapFactory.decodeFile(path)
-                                    }
-                                }
-                                val loadedBitmap = bitmap
-                                if (loadedBitmap != null) {
-                                    val imageBitmap = loadedBitmap.asImageBitmap()
-                                    Column(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(
-                                            text = "屏幕截图",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(vertical = 4.dp)
-                                        )
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            border = androidx.compose.foundation.BorderStroke(
-                                                1.dp,
-                                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Image(
-                                                bitmap = imageBitmap,
-                                                contentDescription = "截图",
-                                                contentScale = ContentScale.FillWidth,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { showFullscreenImage = true }
-                                            )
+                                item {
+                                    val bitmap by produceState<android.graphics.Bitmap?>(null, path) {
+                                        value = withContext(Dispatchers.IO) {
+                                            try {
+                                                val options = BitmapFactory.Options().apply {
+                                                    inJustDecodeBounds = true
+                                                }
+                                                BitmapFactory.decodeFile(path, options)
+                                                // 限制最大宽度为 1080px
+                                                options.inSampleSize = calculateInSampleSize(options, 1080, 1920)
+                                                options.inJustDecodeBounds = false
+                                                BitmapFactory.decodeFile(path, options)
+                                            } catch (_: Exception) {
+                                                null
+                                            }
                                         }
                                     }
+                                    val loadedBitmap = bitmap
+                                    if (loadedBitmap != null) {
+                                        val imageBitmap = loadedBitmap.asImageBitmap()
+                                        Column(
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "屏幕截图",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(vertical = 4.dp)
+                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                border = androidx.compose.foundation.BorderStroke(
+                                                    1.dp,
+                                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Image(
+                                                    bitmap = imageBitmap,
+                                                    contentDescription = "截图",
+                                                    contentScale = ContentScale.FillWidth,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable { showFullscreenImage = true }
+                                                )
+                                            }
+                                        }
 
-                                    if (showFullscreenImage) {
-                                        FullscreenImageDialog(
-                                            bitmap = imageBitmap,
-                                            onDismiss = { showFullscreenImage = false }
-                                        )
+                                        if (showFullscreenImage) {
+                                            FullscreenImageDialog(
+                                                bitmap = imageBitmap,
+                                                onDismiss = { showFullscreenImage = false }
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        // 内容区块
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            val sections = remember(currentItem.result) {
-                                MarkdownParser.parse(currentItem.result)
+                        // 3. 内容区块
+                        val sections = MarkdownParser.parse(currentItem.result)
+                        val isQueryPlaceholder =
+                            currentItem.query == "正在思考中..." || currentItem.query.isBlank()
+                        val isResultPlaceholder =
+                            sections.all { it.title.isEmpty() && (it.content == "正在思考中..." || it.content.isBlank()) }
+
+                        // 1. 提取阶段
+                        if (currentItem.status == AnalysisStatus.PROCESSING && isQueryPlaceholder) {
+                            item {
+                                ThinkingCard("正在提取内容...", Modifier.padding(16.dp))
                             }
-
-                            val isQueryPlaceholder =
-                                currentItem.query == "正在思考中..." || currentItem.query.isBlank()
-                            val isResultPlaceholder =
-                                sections.all { it.title.isEmpty() && (it.content == "正在思考中..." || it.content.isBlank()) }
-
-                            // 1. 提取阶段
-                            if (currentItem.status == AnalysisStatus.PROCESSING && isQueryPlaceholder) {
-                                ThinkingCard("正在提取内容...")
-                            } else {
-                                // 2. 显示提取内容
-                                if (!isQueryPlaceholder && currentItem.status != AnalysisStatus.FAILURE) {
-                                    val isStructured = remember(currentItem.query) {
-                                        currentItem.query.contains("{") && currentItem.query.contains(
-                                            "}"
-                                        )
-                                    }
+                        } else {
+                            // 2. 显示提取内容
+                            if (!isQueryPlaceholder && currentItem.status != AnalysisStatus.FAILURE) {
+                                item {
+                                    val isStructured = currentItem.query.contains("{") && currentItem.query.contains("}")
                                     ContentCard(
                                         title = if (isStructured) "解析问题" else "提取内容",
                                         content = NotificationUtils.renderStructuredQuestion(
                                             currentItem.query
                                         ),
-                                        badgeText = AutomationTools.extractQuestionType(currentItem.query)
+                                        badgeText = AutomationTools.extractQuestionType(currentItem.query),
+                                        modifier = Modifier.padding(horizontal = 16.dp)
                                     )
                                 }
+                            }
 
-                                // 3. 分析阶段
-                                if (currentItem.status == AnalysisStatus.PROCESSING && isResultPlaceholder) {
-                                    ThinkingCard("正在生成分析")
-                                } else if (currentItem.status != AnalysisStatus.CANCELLED) {
-                                    // 4. 显示分析结果（已取消任务不显示部分结果）
-                                    sections.forEachIndexed { index, section ->
-                                        if (section.content.isNotBlank()) {
-                                            DetailSection(
-                                                title = section.title,
-                                                content = section.content,
-                                                isPrimary = index == sections.lastIndex
-                                            )
-                                        }
+                            // 3. 分析阶段
+                            if (currentItem.status == AnalysisStatus.PROCESSING && isResultPlaceholder) {
+                                item {
+                                    ThinkingCard("正在生成分析", Modifier.padding(16.dp))
+                                }
+                            } else if (currentItem.status != AnalysisStatus.CANCELLED) {
+                                // 4. 显示分析结果（已取消任务不显示部分结果）
+                                itemsIndexed(sections) { index, section ->
+                                    if (section.content.isNotBlank()) {
+                                        DetailSection(
+                                            title = section.title,
+                                            content = section.content,
+                                            isPrimary = index == sections.lastIndex,
+                                            modifier = Modifier.padding(horizontal = 16.dp)
+                                        )
                                     }
                                 }
                             }
                         }
 
-                        Spacer(Modifier.height(32.dp))
+                        item {
+                            Spacer(Modifier.height(32.dp))
+                        }
                     }
                 }
             }
@@ -280,6 +291,26 @@ fun HistoryDetailScreen(
             message = "加载详情中"
         )
     }
+}
+
+/**
+ * 计算采样率。
+ */
+private fun calculateInSampleSize(
+    options: BitmapFactory.Options,
+    reqWidth: Int,
+    reqHeight: Int
+): Int {
+    val (height: Int, width: Int) = options.outHeight to options.outWidth
+    var inSampleSize = 1
+    if (height > reqHeight || width > reqWidth) {
+        val halfHeight: Int = height / 2
+        val halfWidth: Int = width / 2
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+    return inSampleSize
 }
 
 /**
@@ -318,9 +349,9 @@ fun MetadataRow(icon: ImageVector, label: String, value: String, modifier: Modif
  * 思考中进度卡片。
  */
 @Composable
-fun ThinkingCard(text: String) {
+fun ThinkingCard(text: String, modifier: Modifier = Modifier) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
@@ -352,10 +383,11 @@ fun ThinkingCard(text: String) {
 fun ContentCard(
     title: String = "解析问题",
     content: String,
-    badgeText: String? = null
+    badgeText: String? = null,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier.padding(top = 12.dp),
+        modifier = modifier.padding(top = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
@@ -409,10 +441,11 @@ fun DetailSection(
     title: String,
     content: String,
     isPrimary: Boolean = false,
-    badgeText: String? = null
+    badgeText: String? = null,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier.padding(top = 12.dp),
+        modifier = modifier.padding(top = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (title.isNotBlank()) {

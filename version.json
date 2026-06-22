@@ -1,14 +1,14 @@
 {
-  "versionCode": 10,
-  "versionName": "0.1.0-alpha",
-  "releaseDate": "2026-06-21",
+  "versionCode": 11,
+  "versionName": "0.1.1-alpha",
+  "releaseDate": "2026-06-22",
   "level": "recommended",
   "apkSize": "19 MB",
   "updateLog": [
-    "在设置页面和底部导航栏新增了徽章提醒，帮助新用户快速完成模型设置",
-    "现在可以自由设置侧边抽屉的弹出位置，并优化了裁剪工具，使用会更轻松地选取内容",
-    "修复了 AI 回复中题目内容重复显示的问题，解决了开启隐私模式可能导致部分设备的启动卡顿问题"
+    "解决了在查看长篇解析或频繁操作时可能导致的闪退问题，即使是配置较低的手机也能流畅运行。",
+    "优化了通知栏显示逻辑，当答案包含复杂数学公式时，通知栏会自动简化提醒，点击进入即可查看精美的完整排版，避免乱码困扰。",
+    "修复了连续截图时内容可能发生重叠的错误，确保每一次解析都从零开始，准确无误，优化了截图的处理方式，大幅减少手机内存占用，操作更加轻快。"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.1.0-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.1.0-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.1.1-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.1.1-alpha/app-release.apk"
 }

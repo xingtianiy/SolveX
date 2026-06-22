@@ -88,6 +88,7 @@ class DrawerManager(
 
         autoScroll.value = autoScrollEnabled
 
+        clearLiveBuffer()
         if (composeView != null) {
             updateContent(historyId)
             return

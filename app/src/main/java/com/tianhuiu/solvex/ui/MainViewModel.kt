@@ -711,8 +711,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 id = UUID.randomUUID().toString(),
                 name = "题目解答助手",
                 ocrPrompt = "你是一个精准的题目转录员。请直接原文输出图片中的题目文本和选项，严禁改写。如果是数学题，请使用 LaTeX 语法确保公式和符号渲染准确。",
-                textPrompt = "你是一个资深的解题专家。请对提取出的题目进行深度解析。\n\n输出规范：\n- 必须包含且仅包含以下三个模块：### 题目分析、### 解题步骤、### 最终答案\n- **公式优先**：强烈建议并优先使用复杂的专业 LaTeX 公式。解题过程应尽量使用文字描述逻辑，减少简单的 1, 2, 3 编号公式，将数学表达融入到高质量的复杂公式中。\n- 禁止输出 JSON、XML、YAML、表格或代码块包裹正文\n- 每个标题下必须有实质内容，禁止空标题",
-                visionPrompt = "你是一个拥有视觉感知能力的解题专家。请结合图片细节进行深度解析。\n\n输出规范：\n- 必须包含且仅包含以下三个模块：### 题目分析、### 解题步骤、### 最终答案\n- **公式优先**：强烈建议并优先使用复杂的专业 LaTeX 公式。解题过程应尽量使用文字描述逻辑，减少简单的 1, 2, 3 编号公式，将数学表达融入到高质量的复杂公式中。\n- 禁止输出 JSON、XML、YAML、表格或代码块包裹正文\n- 每个标题下必须有实质内容，禁止空标题"
+                textPrompt = "你是一个资深的解题专家。请对提取出的题目进行深度解析。\n\n输出要求：\n- 必须包含且仅包含以下三个模块：### 题目分析、### 解题步骤、### 最终答案\n- **公式优先**：强烈建议并优先使用专业 LaTeX 公式。解题过程用文字描述逻辑，将数学表达融入高质量公式中。",
+                visionPrompt = "你是一个拥有视觉感知能力的解题专家。请结合图片细节进行深度解析。\n\n输出要求：\n- 必须包含且仅包含以下三个模块：### 题目分析、### 解题步骤、### 最终答案\n- **公式优先**：强烈建议并优先使用专业 LaTeX 公式。解题过程用文字描述逻辑，将数学表达融入高质量公式中。"
             ),
             AssistantConfig(
                 id = UUID.randomUUID().toString(),
@@ -725,24 +725,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
         permissions = PermissionSettings()
         save()
-    }
-
-    // ---- 权限引导 ----
-
-    fun getMissingSteps(): List<PermissionSetupStep> {
-        val context = getApplication<Application>()
-        val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
-        val mode = permissions.captureMode
-
-        val missing = mutableListOf<PermissionSetupStep>()
-
-        if (!isOverlayPermissionGranted) missing.add(PermissionSetupStep.OVERLAY)
-        if (!isNotificationPermissionGranted) missing.add(PermissionSetupStep.NOTIFICATION)
-        if (mode == CaptureMode.ACCESSIBILITY && !isAccessibilityEnabled) missing.add(PermissionSetupStep.ACCESSIBILITY)
-        if (!pm.isIgnoringBatteryOptimizations(context.packageName)) missing.add(PermissionSetupStep.BATTERY)
-        if (mode == CaptureMode.SHIZUKU && (!isShizukuPermissionGranted || !isShizukuRunning)) missing.add(PermissionSetupStep.SHIZUKU)
-
-        return missing
     }
 
     fun getRelevantSteps(): List<PermissionSetupStep> {
