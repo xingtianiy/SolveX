@@ -10,6 +10,5 @@ object QuickMode : Mode {
     override val description = "适合快速查询"
     override val icon = Icons.Default.AutoMode
     override val shouldCrop = false
-    override val requiresAutomationAction = true
     override fun defaultConfig() = ModeConfig(autoOpenDrawer = false)
 }

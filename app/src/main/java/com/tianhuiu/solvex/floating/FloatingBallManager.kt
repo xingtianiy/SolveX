@@ -23,13 +23,9 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlin.math.abs
 
-/**
- * 悬浮球管理器。
- */
 class FloatingBallManager(private val context: Context) {
 
     companion object {
-        /** 全局自动隐藏延迟时长（毫秒） */
         private const val AUTO_HIDE_DELAY_MS = 5000L
     }
 
@@ -95,9 +91,6 @@ class FloatingBallManager(private val context: Context) {
     var onDoubleClick: (() -> Unit)? = null
     var onLongClick: (() -> Unit)? = null
 
-    /**
-     * 显示悬浮球。
-     */
     fun show() {
         val existing = composeView
         if ((existing != null) && (existing.parent != null)) return
@@ -131,9 +124,6 @@ class FloatingBallManager(private val context: Context) {
         resetHideTimer()
     }
 
-    /**
-     * 隐藏悬浮球。
-     */
     fun hide() {
         handler.removeCallbacks(hideRunnable)
         handler.post {
@@ -149,9 +139,6 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 更新防截屏标志。
-     */
     fun updateSecureFlag(enabled: Boolean) {
         handler.post {
             val currentFlags = layoutParams.flags
@@ -172,9 +159,6 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 截屏前临时隐藏。
-     */
     fun tempHide() {
         handler.removeCallbacks(hideRunnable)
         handler.post {
@@ -189,9 +173,6 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 恢复临时隐藏的悬浮球。
-     */
     fun restore() {
         handler.post {
             composeView?.let {
@@ -206,10 +187,12 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 更新悬浮球状态。
-     */
+    // 答案展示保护：非紧急状态不得覆盖正在显示的答案
     fun updateStatus(newStatus: BallStatus) {
+        if (ballText != null && status == BallStatus.SUCCESS &&
+            newStatus != BallStatus.SUCCESS && newStatus != BallStatus.ERROR) {
+            return
+        }
         status = newStatus
         if ((newStatus == BallStatus.SUCCESS) || (newStatus == BallStatus.ERROR)) {
             handler.removeCallbacks(hideRunnable)
@@ -226,9 +209,6 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 在悬浮球上显示文字。
-     */
     fun showText(text: String) {
         ballText = text
         displayMode = BallDisplayMode.FULL
@@ -236,9 +216,6 @@ class FloatingBallManager(private val context: Context) {
         updateStatus(BallStatus.SUCCESS)
     }
 
-    /**
-     * 重置自动隐藏计时器。
-     */
     private fun resetHideTimer() {
         handler.removeCallbacks(hideRunnable)
         if (enableAutoHide) {
@@ -246,9 +223,6 @@ class FloatingBallManager(private val context: Context) {
         }
     }
 
-    /**
-     * 获取悬浮球视觉宽度（像素）。
-     */
     private fun getCurrentBallWidthPx(): Int {
         val density = context.resources.displayMetrics.density
         val dpValue =
@@ -256,9 +230,6 @@ class FloatingBallManager(private val context: Context) {
         return (dpValue * density).toInt()
     }
 
-    /**
-     * 将悬浮球吸附到屏幕边缘。
-     */
     private fun snapToEdge() {
         val view = composeView ?: return
         if (view.parent == null) return

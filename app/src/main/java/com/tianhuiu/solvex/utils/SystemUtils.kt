@@ -54,6 +54,15 @@ object SystemUtils {
         clipboard.setPrimaryClip(ClipData.newPlainText("SolveX Answer", text))
     }
 
+    /**
+     * 统一结果投递：复制到剪贴板并提示。
+     */
+    fun deliverResult(context: Context, text: String) {
+        if (text.isBlank()) return
+        copyToClipboard(context, text)
+        showToast(context, "已复制到剪贴板")
+    }
+
     fun showToast(context: Context, message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }

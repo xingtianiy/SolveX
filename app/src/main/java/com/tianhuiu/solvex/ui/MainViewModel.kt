@@ -163,9 +163,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isAllPermissionsReady: Boolean
         get() {
             val mode = permissions.captureMode
-            return isOverlayPermissionGranted && when (mode) {
-                CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
-                CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
+            return isOverlayPermissionGranted && when {
+                permissions.captureMode == CaptureMode.TEXT_ONLY || mode == CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
+                mode == CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
                 else -> true
             }
         }
@@ -241,7 +241,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     assistants = config.assistants
                     permissions = config.permissions
                     selectedAssistantId = config.selectedAssistantId
-                    selectedEngine = config.selectedEngine
+                    selectedEngine = if (config.permissions.captureMode == CaptureMode.TEXT_ONLY) {
+                        EngineType.TEXT_ENGINE
+                    } else {
+                        config.selectedEngine
+                    }
                     selectedModeId = config.selectedModeId
                     currentModeConfig = config.currentModeConfig()
                     allModeConfigs = config.modeConfigs
@@ -376,6 +380,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setEngine(engine: EngineType) {
+        // 屏幕取字模式下锁定为文本引擎
+        if (permissions.captureMode == CaptureMode.TEXT_ONLY && engine != EngineType.TEXT_ENGINE) return
         selectedEngine = engine
         save()
     }
@@ -556,9 +562,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // 判断当前截屏模式下是否已就绪（必需权限全部满足）
         val mode = permissions.captureMode
-        val isReady = isOverlayPermissionGranted && when (mode) {
-            CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
-            CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
+        val isReady = isOverlayPermissionGranted && when {
+            permissions.captureMode == CaptureMode.TEXT_ONLY || mode == CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
+            mode == CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
             else -> true
         }
 
@@ -648,8 +654,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startService() {
         if (!isOverlayPermissionGranted) return
 
-        activeModeId = selectedModeId
-
         when (permissions.captureMode) {
             CaptureMode.SYSTEM -> {
                 // 触发 MediaProjection 权限弹窗，结果通过 startMainService 回调
@@ -661,7 +665,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 startMainService(resultCode = 0, projectionData = null)
             }
 
-            CaptureMode.ACCESSIBILITY -> {
+            CaptureMode.ACCESSIBILITY, CaptureMode.TEXT_ONLY -> {
                 if (!isAccessibilityEnabled) return
                 startMainService(resultCode = 0, projectionData = null)
             }
@@ -669,6 +673,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startMainService(resultCode: Int, projectionData: Intent?) {
+        activeModeId = selectedModeId
         val context = getApplication<Application>()
         val intent = Intent(context, MainService::class.java).apply {
             action = MainService.ACTION_START
@@ -733,7 +738,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         relevant.add(PermissionSetupStep.OVERLAY)
         relevant.add(PermissionSetupStep.NOTIFICATION)
-        if (mode == CaptureMode.ACCESSIBILITY) relevant.add(PermissionSetupStep.ACCESSIBILITY)
+        if (permissions.captureMode == CaptureMode.TEXT_ONLY || mode == CaptureMode.ACCESSIBILITY)
+            relevant.add(PermissionSetupStep.ACCESSIBILITY)
         relevant.add(PermissionSetupStep.BATTERY)
         if (mode == CaptureMode.SHIZUKU) relevant.add(PermissionSetupStep.SHIZUKU)
 
@@ -749,9 +755,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val mode = permissions.captureMode
 
         // 检查当前截屏模式下是否所有必需权限均已满足
-        val requiredGranted = isOverlayPermissionGranted && when (mode) {
-            CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
-            CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
+        val requiredGranted = isOverlayPermissionGranted && when {
+            permissions.captureMode == CaptureMode.TEXT_ONLY || mode == CaptureMode.ACCESSIBILITY -> isAccessibilityEnabled
+            mode == CaptureMode.SHIZUKU -> isShizukuPermissionGranted && isShizukuRunning
             else -> true
         }
         val batteryOk = pm.isIgnoringBatteryOptimizations(context.packageName)
@@ -782,8 +788,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             !isOverlayPermissionGranted -> PermissionSetupStep.OVERLAY
             // 可选：通知
             !isNotificationPermissionGranted -> PermissionSetupStep.NOTIFICATION
-            // 仅 ACCESSIBILITY 模式
-            mode == CaptureMode.ACCESSIBILITY && !isAccessibilityEnabled -> PermissionSetupStep.ACCESSIBILITY
+            // 屏幕取字模式或 ACCESSIBILITY 模式需要无障碍服务
+            (permissions.captureMode == CaptureMode.TEXT_ONLY || mode == CaptureMode.ACCESSIBILITY) && !isAccessibilityEnabled -> PermissionSetupStep.ACCESSIBILITY
             // 必须：电池优化
             !pm.isIgnoringBatteryOptimizations(context.packageName) -> PermissionSetupStep.BATTERY
             // 仅 SHIZUKU 模式

@@ -10,6 +10,5 @@ object StudyMode : Mode {
     override val description = "适合学习场景"
     override val icon = Icons.Default.School
     override val shouldCrop = true
-    override val requiresAutomationAction = false
     override fun defaultConfig() = ModeConfig(autoOpenDrawer = true)
 }

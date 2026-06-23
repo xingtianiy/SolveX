@@ -11,7 +11,6 @@ interface Mode {
     val description: String
     val icon: ImageVector
     val shouldCrop: Boolean
-    val requiresAutomationAction: Boolean
     fun defaultConfig(): ModeConfig
 }
 

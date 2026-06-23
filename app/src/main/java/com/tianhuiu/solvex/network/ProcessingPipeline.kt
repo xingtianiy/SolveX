@@ -3,10 +3,8 @@ package com.tianhuiu.solvex.network
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
-import android.util.Log
 import com.tianhuiu.solvex.data.models.AppConfig
 import com.tianhuiu.solvex.data.models.AssistantConfig
-import com.tianhuiu.solvex.data.models.AutomationAction
 import com.tianhuiu.solvex.data.models.EngineType
 import com.tianhuiu.solvex.data.models.ModelProvider
 import com.tianhuiu.solvex.data.models.ProcessingEvent
@@ -14,7 +12,6 @@ import com.tianhuiu.solvex.data.models.ProcessingResult
 import com.tianhuiu.solvex.data.models.ProcessingRoute
 import com.tianhuiu.solvex.data.models.ProcessingStatus
 import com.tianhuiu.solvex.data.models.currentModeConfig
-import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.utils.AutomationTools
 import com.tianhuiu.solvex.utils.FileUtils
 import kotlinx.coroutines.CancellationException
@@ -132,6 +129,27 @@ class ProcessingPipeline(
     }
 
     /**
+     * 初始化纯文本处理结果，不保存截图。
+     */
+    fun createBaseResultTextOnly(
+        models: ResolvedModels,
+        detail: String
+    ): ProcessingResult {
+        val historyId = UUID.randomUUID().toString()
+        return ProcessingResult(
+            id = historyId,
+            assistantName = models.assistant.name,
+            route = ProcessingRoute.OCR_THEN_LLM,
+            status = ProcessingStatus.RUNNING,
+            modelSummary = buildModelSummary(models.textModel, models.textProvider?.name),
+            detail = detail,
+            screenshotPath = null,
+            screenshotPaths = emptyList(),
+            events = listOf(ProcessingEvent(title = "文本捕获", detail = "已通过无障碍服务获取屏幕文本"))
+        )
+    }
+
+    /**
      * 执行自动化解题流程，包括并行生成摘要与提取题目。
      */
     suspend fun process(
@@ -242,35 +260,9 @@ class ProcessingPipeline(
                     )
                 }
 
-                // 请求极简答案/自动化动作
-                var automationAction: AutomationAction? = null
-                try {
-                    val autoText = collectTextStream(
-                        provider = models.visionProvider ?: models.ocrProvider
-                        ?: error("未配置提供商"),
-                        model = if (models.visionProvider != null) models.visionModel else models.ocrModel,
-                        systemPrompt = Prompts.AUTOMATION_SYSTEM_PROMPT,
-                        userPrompt = "请识别题型并给出答案。参考 OCR 结果：\n$extractedText",
-                        imagesBase64 = if (models.visionProvider != null) listOf(imageBase64) else emptyList(),
-                        firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
-                        onDelta = { _ -> }
-                    )
-                    automationAction = AutomationTools.parseAutomationResponse(autoText)
-                } catch (e: Exception) {
-                    Log.e("ProcessingPipeline", "Automation request failed", e)
-                }
-
                 summaryDeferred.await()
 
-                // 检测自动化动作是否必需
-                val mode = ModeRegistry.get(config.selectedModeId)
-                if (mode.requiresAutomationAction && automationAction == null) {
-                    return@coroutineScope base.copy(
-                        status = ProcessingStatus.FAILURE,
-                        detail = "自动模式解析失败：模型未返回有效结果，请检查模型是否支持 Chat Completions API"
-                    )
-                }
-                if (answer.isBlank() && extractedText.isBlank() && automationAction == null) {
+                if (answer.isBlank() && extractedText.isBlank()) {
                     return@coroutineScope base.copy(
                         status = ProcessingStatus.FAILURE,
                         detail = "模型返回空内容，请检查模型配置是否正确"
@@ -281,7 +273,87 @@ class ProcessingPipeline(
                     status = ProcessingStatus.SUCCESS,
                     extractedText = extractedText,
                     answer = answer,
-                    automationAction = automationAction,
+                    detail = "分析完成"
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                base.copy(status = ProcessingStatus.FAILURE, detail = SseStreamClient.translateNetworkException(e))
+            }
+        }
+    }
+
+    /**
+     * 纯文本处理路径：接收无障碍服务提取的文本，跳过截图与多模态。
+     */
+    suspend fun processTextOnly(
+        config: AppConfig,
+        capturedText: String,
+        onSummaryGenerated: (String, String) -> Unit = { _, _ -> },
+        onQueryExtracted: (String) -> Unit = {},
+        onDelta: (String) -> Unit
+    ): ProcessingResult = withContext(Dispatchers.Default) {
+        val models = resolveModels(config)
+        val base = createBaseResultTextOnly(models, "正在分析文本内容...")
+
+        coroutineScope {
+            try {
+                onQueryExtracted(capturedText)
+
+                val summaryDeferred = async {
+                    try {
+                        val summaryText = collectTextStream(
+                            provider = models.textProvider ?: models.ocrProvider
+                                ?: error("未配置文本模型"),
+                            model = models.textModel.ifBlank { models.ocrModel },
+                            systemPrompt = Prompts.SUMMARY_SYSTEM_PROMPT,
+                            userPrompt = "请为以下文本生成标题和摘要。\n\n$capturedText",
+                            imagesBase64 = emptyList(),
+                            firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis
+                        ) { _ -> }
+                        parseSummary(summaryText)?.let { (title, summary) ->
+                            onSummaryGenerated(title, summary)
+                        }
+                    } catch (_: Exception) { }
+                }
+
+                if (capturedText.isBlank()) {
+                    summaryDeferred.await()
+                    return@coroutineScope base.copy(
+                        status = ProcessingStatus.FAILURE,
+                        detail = "未从屏幕中提取到文本内容",
+                        extractedText = ""
+                    )
+                }
+
+                val analysisPrompt = if (models.assistant.useStructuredExtraction) {
+                    "${Prompts.ANALYSIS_SYSTEM_BASE}\n用户配置：${models.assistant.textPrompt}"
+                } else {
+                    models.assistant.textPrompt
+                }
+
+                val answer = collectTextStream(
+                    provider = models.textProvider ?: error("未配置文本模型"),
+                    model = models.textModel,
+                    systemPrompt = analysisPrompt,
+                    userPrompt = "以下是从屏幕视图中提取的内容，请按照要求进行深度处理：\n\n$capturedText",
+                    imagesBase64 = emptyList(),
+                    firstDeltaTimeoutMillis = models.firstDeltaTimeoutMillis,
+                    onDelta = onDelta
+                )
+
+                summaryDeferred.await()
+
+                if (answer.isBlank() && capturedText.isBlank()) {
+                    return@coroutineScope base.copy(
+                        status = ProcessingStatus.FAILURE,
+                        detail = "模型返回空内容，请检查模型配置是否正确"
+                    )
+                }
+
+                base.copy(
+                    status = ProcessingStatus.SUCCESS,
+                    extractedText = capturedText,
+                    answer = answer,
                     detail = "分析完成"
                 )
             } catch (e: Exception) {

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.StopCircle
@@ -50,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -255,11 +257,13 @@ fun ConfigurationBoard(
                         isSelected = viewModel.selectedEngine == EngineType.TEXT_ENGINE,
                         onClick = { viewModel.setEngine(EngineType.TEXT_ENGINE) }
                     )
+                    val textCaptureOn = viewModel.permissions.captureMode == CaptureMode.TEXT_ONLY
                     EngineCardCompact(
                         modifier = Modifier.weight(1f),
                         type = EngineType.VISION_ENGINE,
                         isSelected = viewModel.selectedEngine == EngineType.VISION_ENGINE,
-                        onClick = { viewModel.setEngine(EngineType.VISION_ENGINE) }
+                        onClick = { if (!textCaptureOn) viewModel.setEngine(EngineType.VISION_ENGINE) },
+                        enabled = !textCaptureOn
                     )
                 }
             }
@@ -433,7 +437,8 @@ fun EngineCardCompact(
     modifier: Modifier = Modifier,
     type: EngineType,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     val bgColor =
         if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
@@ -443,8 +448,10 @@ fun EngineCardCompact(
         if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
 
     Surface(
-        onClick = onClick,
-        modifier = modifier.height(90.dp),
+        onClick = { if (enabled) onClick() },
+        modifier = modifier
+            .height(90.dp)
+            .then(if (!enabled) Modifier.alpha(0.4f) else Modifier),
         shape = RoundedCornerShape(16.dp),
         color = bgColor,
         border = androidx.compose.foundation.BorderStroke(
@@ -491,6 +498,18 @@ fun EngineCardCompact(
                         .size(16.dp)
                 )
             }
+
+            if (!enabled) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = "屏幕取字模式下不可用",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(16.dp)
+                )
+            }
         }
     }
 }
@@ -505,11 +524,12 @@ fun ActionSection(viewModel: MainViewModel) {
 
     val isRunning = viewModel.isServiceRunning
 
-    // 根据截屏模式判断启动按钮是否可用
-    val isStartEnabled = when (captureMode) {
-        CaptureMode.SYSTEM -> isOverlayEnabled
-        CaptureMode.ACCESSIBILITY -> isOverlayEnabled && isAccessibilityEnabled
-        CaptureMode.SHIZUKU -> isOverlayEnabled && isShizukuGranted
+    // 根据截屏模式或屏幕取字模式判断启动按钮是否可用
+    val isStartEnabled = when {
+        viewModel.permissions.captureMode == CaptureMode.TEXT_ONLY -> isOverlayEnabled && isAccessibilityEnabled
+        captureMode == CaptureMode.SYSTEM -> isOverlayEnabled
+        captureMode == CaptureMode.ACCESSIBILITY -> isOverlayEnabled && isAccessibilityEnabled
+        captureMode == CaptureMode.SHIZUKU -> isOverlayEnabled && isShizukuGranted
         else -> isOverlayEnabled
     }
 
@@ -517,6 +537,7 @@ fun ActionSection(viewModel: MainViewModel) {
     val disabledHint: String? = when {
         isStartEnabled || isRunning -> null
         !isOverlayEnabled -> "请先授予「显示在其他应用上层」权限"
+        viewModel.permissions.captureMode == CaptureMode.TEXT_ONLY -> "屏幕取字模式需要先开启「SolveX 无障碍服务」"
         captureMode == CaptureMode.ACCESSIBILITY -> "请先在系统设置中开启「SolveX 无障碍服务」"
         true -> "请先启动 Shizuku 并授权 SolveX"
         else -> null

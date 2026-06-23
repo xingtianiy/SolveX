@@ -1,42 +1,13 @@
 package com.tianhuiu.solvex.utils
 
-import com.tianhuiu.solvex.data.models.AutomationAction
 import com.tianhuiu.solvex.data.models.ExtractedQuestion
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * 自动化处理工具类。
  */
 object AutomationTools {
     private val json = Json { ignoreUnknownKeys = true }
-
-    /**
-     * 解析模型返回的自动化 JSON 响应。
-     */
-    fun parseAutomationResponse(text: String): AutomationAction? {
-        if (text.isBlank()) return null
-        return try {
-            val cleanJson = text.substringAfter("{").substringBeforeLast("}")
-            val obj = json.parseToJsonElement("{$cleanJson}").jsonObject
-            val type = obj["type"]?.jsonPrimitive?.content ?: "other"
-            val rawAnswer = obj["answer"]?.jsonPrimitive?.content ?: ""
-
-            // 规范化空白
-            val answer = if (type.lowercase() == "choice") {
-                rawAnswer.replace(" ", "").replace("\n", "").replace("\r", "").uppercase()
-            } else {
-                rawAnswer.trim()
-            }
-
-            val actionType =
-                if (type.lowercase() == "choice") "show_bubble_letters" else "set_clipboard"
-            AutomationAction(actionType, answer)
-        } catch (_: Exception) {
-            null
-        }
-    }
 
     /**
      * 解析结构化题目 JSON。

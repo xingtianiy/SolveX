@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessibilityNew
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material.icons.filled.Terminal
@@ -133,8 +134,42 @@ fun GeneralSettingsScreen(
                         }
                     )
                     SettingsItem(
+                        label = "屏幕取字",
+                        subLabel = "框选屏幕区域提取屏幕内容，不截取屏幕图片，需要无障碍服务支持。",
+                        icon = Icons.Default.Description,
+                        trailing = {
+                            RadioButton(
+                                selected = viewModel.permissions.captureMode == CaptureMode.TEXT_ONLY,
+                                onClick = {
+                                    if (viewModel.isServiceRunning) {
+                                        pendingMode = CaptureMode.TEXT_ONLY
+                                    } else {
+                                        viewModel.updatePermissions(
+                                            viewModel.permissions.copy(
+                                                captureMode = CaptureMode.TEXT_ONLY
+                                            )
+                                        )
+                                        if (!viewModel.isAccessibilityEnabled) {
+                                            showAccessibilityConfirm = true
+                                        }
+                                    }
+                                }
+                            )
+                        },
+                        onClick = {
+                            if (viewModel.isServiceRunning) {
+                                pendingMode = CaptureMode.TEXT_ONLY
+                            } else {
+                                viewModel.updatePermissions(viewModel.permissions.copy(captureMode = CaptureMode.TEXT_ONLY))
+                                if (!viewModel.isAccessibilityEnabled) {
+                                    showAccessibilityConfirm = true
+                                }
+                            }
+                        }
+                    )
+                    SettingsItem(
                         label = "Shizuku ADB",
-                        subLabel = "通过 Shizuku 授权后调用 ADB 截图。适合进阶用户使用。",
+                        subLabel = "通过 Shizuku 授权后调用 ADB 截图，这种模式适合进阶用户使用。",
                         icon = Icons.Default.Terminal,
                         trailing = {
                             RadioButton(

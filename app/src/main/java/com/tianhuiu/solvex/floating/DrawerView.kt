@@ -14,8 +14,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tianhuiu.solvex.data.models.AnalysisStatus
@@ -41,6 +46,7 @@ import com.tianhuiu.solvex.ui.history.MetadataRow
 import com.tianhuiu.solvex.utils.AutomationTools
 import com.tianhuiu.solvex.utils.DateTimeUtils
 import com.tianhuiu.solvex.utils.NotificationUtils
+import com.tianhuiu.solvex.utils.SystemUtils
 
 /**
  * 侧边抽屉视图
@@ -52,6 +58,7 @@ fun DrawerView(
     autoScroll: Boolean = true,
     onClose: () -> Unit
 ) {
+    val context = LocalContext.current
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surface,
@@ -124,6 +131,50 @@ fun DrawerView(
                                         icon = Icons.Default.Face,
                                         label = "助手",
                                         value = item.assistantName ?: "默认"
+                                    )
+                                }
+                            }
+                        }
+
+                        if (item.status == AnalysisStatus.SUCCESS) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                AssistChip(
+                                    onClick = {
+                                        val textToCopy = item.result
+                                        SystemUtils.copyToClipboard(context, textToCopy)
+                                    },
+                                    label = { Text("复制解析") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.ContentCopy,
+                                            null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                                            alpha = 0.4f
+                                        )
+                                    )
+                                )
+
+                                val finalAnswer = NotificationUtils.extractFinalAnswer(item.result)
+                                if (finalAnswer.isNotBlank() && finalAnswer != item.result) {
+                                    AssistChip(
+                                        onClick = {
+                                            SystemUtils.copyToClipboard(context, finalAnswer)
+                                        },
+                                        label = { Text("复制答案") },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     )
                                 }
                             }

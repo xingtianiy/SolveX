@@ -1,7 +1,7 @@
 # SolveX — 智能屏幕解析助手
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.1--alpha-orange)](version.json)
+[![Version](https://img.shields.io/badge/version-0.1.2--alpha-orange)](version.json)
 
 SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球交互、多引擎截屏、大语言模型流式响应，为用户提供即时的题目解答、内容分析和知识辅助。
 
@@ -24,6 +24,7 @@ SolveX 是一款基于 Android 平台的 AI 屏幕解析工具。通过悬浮球
 - **系统录屏**：标准的 Android 录屏接口，兼容性好。
 - **无障碍截图**：基于无障碍服务实现，授予权限后可实现静默、连续截图。
 - **Shizuku ADB**：通过 Shizuku 获得 ADB 权限，提供最高效的底层截图能力。
+- **屏幕取字**：通过无障碍服务直接提取文字，无需产生截图文件，隐私更安全。
 
 ### OCR 与 AI 调度
 

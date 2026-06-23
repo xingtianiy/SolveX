@@ -178,7 +178,7 @@ private fun parseBlocks(lines: List<String>): List<Block> {
 // 内联格式渲染
 
 private data class InlineToken(
-    val type: InlineToken.Type,
+    val type: Type,
     val text: String,
 ) {
     enum class Type { TEXT, BOLD, CODE }

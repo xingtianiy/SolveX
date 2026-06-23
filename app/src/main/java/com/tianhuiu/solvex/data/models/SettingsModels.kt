@@ -93,11 +93,13 @@ object CaptureMode {
     const val SYSTEM = "system"
     const val ACCESSIBILITY = "accessibility"
     const val SHIZUKU = "shizuku"
+    const val TEXT_ONLY = "text_only"
 
     fun toDisplayName(mode: String?): String = when (mode) {
         SHIZUKU -> "Shizuku ADB"
         ACCESSIBILITY -> "无障碍截图"
         SYSTEM -> "系统录屏"
+        TEXT_ONLY -> "屏幕取字"
         else -> mode ?: "未知"
     }
 }

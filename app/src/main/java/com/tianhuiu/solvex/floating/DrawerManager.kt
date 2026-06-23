@@ -94,7 +94,7 @@ class DrawerManager(
             return
         }
 
-        val finalWidthPercent = 0.9f
+        val finalWidthPercent = widthPercent.coerceIn(0.3f, 0.9f)
 
         composeView = ComposeView(context).apply {
             (context as? LifecycleOwner)?.let { setViewTreeLifecycleOwner(it) }
