@@ -1,10 +1,8 @@
 package com.tianhuiu.solvex.ui.settings
 
 import android.content.ClipData
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,13 +30,13 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -53,7 +51,6 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,20 +62,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import com.tianhuiu.solvex.data.models.ModelProvider
 import com.tianhuiu.solvex.ui.ConnectivityTestState
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
 import com.tianhuiu.solvex.ui.components.SolveXDialog
+import com.tianhuiu.solvex.ui.components.SortableListItem
 import kotlinx.coroutines.launch
 import java.util.Collections
 
@@ -99,7 +94,6 @@ fun ModelSettingsScreen(
 
     val listState = rememberLazyListState()
     var draggedItemIndex by remember { mutableStateOf<Int?>(null) }
-    var draggingOffset by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
     LocalContext.current
 
@@ -116,8 +110,8 @@ fun ModelSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("模型供应商", fontWeight = FontWeight.Bold) },
+            CenterAlignedTopAppBar(
+                title = { Text("模型提供商", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -208,127 +202,118 @@ fun ModelSettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
                 itemsIndexed(providersList, key = { _, item -> item.id }) { index, provider ->
-                    val isDragging = draggedItemIndex == index
-                    val shadowElevation by animateDpAsState(if (isDragging) 8.dp else 0.dp)
                     val testState = viewModel.connectivityTestStates[provider.id]
-                    
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .shadow(shadowElevation, RoundedCornerShape(12.dp))
-                            .zIndex(if (isDragging) 1f else 0f),
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isDragging) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isDragging) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
+
+                    SortableListItem(
+                        index = index,
+                        itemCount = providersList.size,
+                        isDragging = draggedItemIndex == index,
+                        onDragStart = { draggedItemIndex = index },
+                        onDragEnd = {
+                            draggedItemIndex = null
+                            viewModel.updateProviders(providersList.toList())
+                        },
+                        onSwap = { from, to ->
+                            Collections.swap(providersList, from, to)
+                            draggedItemIndex = to
+                        }
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(12.dp)
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                        // 连通性测试图标/状态
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    when (val result = viewModel.testConnectivity(provider)) {
+                                        is ConnectivityTestState.Success ->
+                                            viewModel.showFeedbackDialog(
+                                                title = "连接成功",
+                                                message = "${provider.name}: 连通成功 (${result.modelCount} 个模型)",
+                                                icon = Icons.Default.CheckCircle
+                                            )
+
+                                        is ConnectivityTestState.Failure ->
+                                            viewModel.showFeedbackDialog(
+                                                title = "连接失败",
+                                                message = "${provider.name}: ${result.message}",
+                                                icon = Icons.Default.Error
+                                            )
+
+                                        else -> {}
+                                    }
+                                }
+                            }
                         ) {
-                            // 连通性测试图标/状态
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        when (val result = viewModel.testConnectivity(provider)) {
-                                            is ConnectivityTestState.Success ->
-                                                viewModel.showFeedbackDialog(
-                                                    title = "连接成功",
-                                                    message = "${provider.name}: 连通成功 (${result.modelCount} 个模型)",
-                                                    icon = Icons.Default.CheckCircle
-                                                )
-                                            is ConnectivityTestState.Failure ->
-                                                viewModel.showFeedbackDialog(
-                                                    title = "连接失败",
-                                                    message = "${provider.name}: ${result.message}",
-                                                    icon = Icons.Default.Error
-                                                )
-                                            else -> {}
-                                        }
-                                    }
-                                }
-                            ) {
-                                when (testState) {
-                                    is ConnectivityTestState.Testing ->
-                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    is ConnectivityTestState.Success ->
-                                        Icon(Icons.Default.CheckCircle, "连接成功", tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
-                                    is ConnectivityTestState.Failure ->
-                                        Icon(Icons.Default.Error, "连接失败", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                                    else ->
-                                        Icon(Icons.Default.Sync, "测试连通", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                }
+                            when (testState) {
+                                is ConnectivityTestState.Testing ->
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+
+                                is ConnectivityTestState.Success ->
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        "连接成功",
+                                        tint = Color(0xFF4CAF50),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+
+                                is ConnectivityTestState.Failure ->
+                                    Icon(
+                                        Icons.Default.Error,
+                                        "连接失败",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+
+                                else ->
+                                    Icon(
+                                        Icons.Default.Sync,
+                                        "测试连通",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                             }
-                            
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    provider.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    provider.type.displayName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            
-                            IconButton(onClick = { onEditProvider(provider.id) }) {
-                                Icon(Icons.Default.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            
-                            IconButton(onClick = { providerToDelete = provider }) {
-                                Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
-                            }
-                            
-                            Icon(
-                                Icons.Default.DragIndicator,
-                                contentDescription = "拖动排序",
-                                tint = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier
-                                    .padding(start = 4.dp)
-                                    .pointerInput(Unit) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = { _ ->
-                                                draggedItemIndex = index
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                draggingOffset += dragAmount.y
-                                                
-                                                val threshold = 60f // 增加阈值提高稳定性
-                                                if (draggingOffset > threshold && index < providersList.size - 1) {
-                                                    Collections.swap(providersList, index, index + 1)
-                                                    draggedItemIndex = index + 1
-                                                    draggingOffset = 0f
-                                                } else if (draggingOffset < -threshold && index > 0) {
-                                                    Collections.swap(providersList, index, index - 1)
-                                                    draggedItemIndex = index - 1
-                                                    draggingOffset = 0f
-                                                }
-                                            },
-                                            onDragEnd = {
-                                                draggedItemIndex = null
-                                                draggingOffset = 0f
-                                                viewModel.updateProviders(providersList.toList())
-                                            },
-                                            onDragCancel = {
-                                                draggedItemIndex = null
-                                                draggingOffset = 0f
-                                                viewModel.updateProviders(providersList.toList())
-                                            }
-                                        )
-                                    }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                provider.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
                             )
+                            Text(
+                                provider.type.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+
+                        Row {
+                            IconButton(onClick = { onEditProvider(provider.id) }) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "编辑",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            IconButton(onClick = { providerToDelete = provider }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "删除",
+                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }

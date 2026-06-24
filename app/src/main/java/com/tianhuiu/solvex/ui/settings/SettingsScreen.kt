@@ -5,13 +5,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AppSettingsAlt
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -78,60 +78,60 @@ fun SettingsScreen(
                 }
             }
             item {
-                SettingsGroup(title = "模型配置") {
+                SettingsGroup(title = "模型管理") {
                     SettingsItem(
-                        label = "模型供应商",
-                        subLabel = "配置 LLM 模型提供方及 API 密钥",
-                        icon = Icons.Default.SmartToy,
+                        label = "模型提供商",
+                        subLabel = "管理 LLM 接口及 API 访问密钥",
+                        icon = Icons.Default.AutoAwesome,
                         onClick = { navController.navigate("settings/models") },
                         badge = if (viewModel.providers.all { it.apiKey.isBlank() }) {
-                            { SettingBadge(text = "未配置") }
+                            { SettingBadge(text = "待配置") }
                         } else null
                     )
                     SettingsItem(
-                        label = "助手管理",
-                        subLabel = "创建、编辑助手及调整展示排序",
-                        icon = Icons.Default.Face,
+                        label = "智能助手",
+                        subLabel = "配置角色提示词与展示优先级",
+                        icon = Icons.Default.SupportAgent,
                         onClick = { navController.navigate("settings/assistants") }
                     )
                 }
             }
             item {
-                SettingsGroup(title = "系统配置") {
+                SettingsGroup(title = "系统与环境") {
                     SettingsItem(
                         label = "通用设置",
-                        subLabel = "配置截图录屏方式及抽屉外观",
-                        icon = Icons.Default.Settings,
+                        subLabel = "调整 UI 偏好与系统交互方式",
+                        icon = Icons.Default.AppSettingsAlt,
                         onClick = { navController.navigate("settings/general") }
                     )
                     SettingsItem(
                         label = "权限设置",
-                        subLabel = "管理系统通知及稳定性权限",
-                        icon = Icons.Default.Layers,
+                        subLabel = "核心运行权限与后台稳定性配置",
+                        icon = Icons.Default.Security,
                         onClick = { navController.navigate("settings/permissions") },
                         badge = if (!viewModel.isAllPermissionsReady) {
                             { SettingBadge(text = "未就绪") }
                         } else null
                     )
                     SettingsItem(
-                        label = "导入导出",
-                        subLabel = "备份、恢复及重置全部配置",
-                        icon = Icons.Default.Backup,
+                        label = "数据管理",
+                        subLabel = "配置文件与历史记录的导入导出",
+                        icon = Icons.Default.Storage,
                         onClick = { navController.navigate("settings/io") }
                     )
                 }
             }
             item {
-                SettingsGroup(title = "其他信息") {
+                SettingsGroup(title = "关于") {
                     SettingsItem(
-                        label = "使用教程",
-                        subLabel = "查看功能指南与常见问题",
-                        icon = Icons.Default.Description,
+                        label = "功能指南",
+                        subLabel = "快速了解 SolveX 的使用方法",
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
                         onClick = { navController.navigate("settings/tutorial") }
                     )
                     SettingsItem(
-                        label = "关于我们",
-                        subLabel = "查看版本信息及开源链接",
+                        label = "关于软件",
+                        subLabel = "检查更新、版本信息与项目致谢",
                         icon = Icons.Default.Info,
                         onClick = { navController.navigate("settings/about") },
                         badge = if (updateViewModel.updateInfo != null) {

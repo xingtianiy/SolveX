@@ -312,6 +312,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pendingSaveJob?.cancel()
         pendingSaveJob = viewModelScope.launch {
             delay(300)
+            val finalModeConfigs = allModeConfigs.toMutableMap().apply {
+                put(selectedModeId, currentModeConfig)
+            }
             repository.saveAppConfig(
                 AppConfig(
                     providers = providers,
@@ -321,9 +324,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     selectedAssistantId = selectedAssistantId,
                     selectedEngine = selectedEngine,
                     selectedModeId = selectedModeId,
-                    modeConfigs = allModeConfigs.toMutableMap().apply {
-                        put(selectedModeId, currentModeConfig)
-                    },
+                    modeConfigs = finalModeConfigs,
                     autoScrollContent = autoScrollContent
                 )
             )
@@ -388,6 +389,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setMode(modeId: String) {
         selectedModeId = modeId
+        currentModeConfig = allModeConfigs[modeId] ?: ModeRegistry.get(modeId).defaultConfig()
         save()
     }
 
@@ -402,10 +404,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkPermissions()
     }
 
-    fun updateModeConfig(config: ModeConfig) {
-        currentModeConfig = config
+    fun updateModeConfig(modeId: String, config: ModeConfig) {
         allModeConfigs = allModeConfigs.toMutableMap().apply {
-            put(selectedModeId, config)
+            put(modeId, config)
+        }
+        if (modeId == selectedModeId) {
+            currentModeConfig = config
         }
         save()
     }
@@ -555,7 +559,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else false
 
         // 无障碍状态
-        isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+        isAccessibilityEnabled = SystemUtils.isAccessibilityServiceEnabled(context, SolveXAccessibilityService::class.java)
 
         val notificationManager =
             (context as SolveXApplication).container.appNotificationManager
@@ -576,15 +580,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // 始终检查权限引导需求（根据截屏模式决定哪些权限是必需的）
         checkAndStartPermissionSetup()
-    }
-
-    private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
-        val serviceName = "${context.packageName}/${SolveXAccessibilityService::class.java.name}"
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-        return enabledServices.split(':').any { it == serviceName }
     }
 
     fun requestOverlayPermission() {

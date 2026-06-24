@@ -81,4 +81,16 @@ object SystemUtils {
             logContent + (throwable?.let { "\n" + android.util.Log.getStackTraceString(it) } ?: "")
         android.util.Log.println(priority, tag, fullLog)
     }
+
+    /**
+     * 检查无障碍服务是否已启用。
+     */
+    fun isAccessibilityServiceEnabled(context: Context, serviceClass: Class<*>): Boolean {
+        val serviceName = "${context.packageName}/${serviceClass.name}"
+        val enabledServices = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabledServices.split(':').any { it == serviceName }
+    }
 }

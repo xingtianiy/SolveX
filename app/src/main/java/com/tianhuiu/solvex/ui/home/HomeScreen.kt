@@ -1,11 +1,13 @@
 package com.tianhuiu.solvex.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -214,7 +216,7 @@ fun ConfigurationBoard(
                     onClick = onOpenAssistantSelection,
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(
+                    border = BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                     )
@@ -347,7 +349,7 @@ fun AssistantSelectionSheet(
                             alpha = 0.3f
                         )
                         else Color.Transparent,
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(
+                        border = if (isSelected) BorderStroke(
                             1.dp,
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                         )
@@ -359,22 +361,15 @@ fun AssistantSelectionSheet(
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    assistant.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                // 如果有模型信息可以显示
-                                Text(
-                                    "个性化智能助手",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                assistant.name,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
                             RadioButton(
                                 selected = isSelected,
-                                onClick = null // 已经通过 Surface 处理了
+                                onClick = null
                             )
                         }
                     }
@@ -681,112 +676,96 @@ fun PermissionSetupGuideCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-        border = androidx.compose.foundation.BorderStroke(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f),
+        border = BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // 进度指示
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    if (currentStep != PermissionSetupStep.DONE)
-                        "快速设置 ($stepIndex/$totalSteps)"
-                    else
-                        "快速设置",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                if (currentStep == PermissionSetupStep.DONE) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-
+        Column(modifier = Modifier.padding(20.dp)) {
             if (currentStep != PermissionSetupStep.DONE) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        currentStep.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    if (currentStep.isOptional) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                        ) {
-                            Text(
-                                "可选",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    } else {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        ) {
-                            Text(
-                                "必需",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    currentStep.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (currentStep.isOptional) {
-                        TextButton(onClick = onSkip) {
-                            Text("跳过")
-                        }
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Button(onClick = onAction) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary,
+                                RoundedCornerShape(10.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            when (currentStep) {
-                                PermissionSetupStep.SHIZUKU -> "去授权"
-                                else -> "去设置"
-                            }
+                            stepIndex.toString(),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
                     }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            currentStep.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "待配置 · 共 $totalSteps 步",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    if (currentStep.isOptional) {
+                        TextButton(onClick = onSkip) {
+                            Text("跳过", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                
+                Text(
+                    currentStep.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Button(
+                    onClick = onAction,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    Text(
+                        when (currentStep) {
+                            PermissionSetupStep.SHIZUKU -> "立即授权 Shizuku"
+                            else -> "前往系统设置"
+                        },
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             } else {
-                // 全部完成
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(
                         Icons.Default.CheckCircle,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     )
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
-                            "设置完成",
+                            "准备就绪",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

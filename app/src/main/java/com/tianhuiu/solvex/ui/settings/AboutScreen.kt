@@ -69,7 +69,7 @@ fun AboutScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("关于我们", fontWeight = FontWeight.Bold) },
+                title = { Text("关于软件", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")

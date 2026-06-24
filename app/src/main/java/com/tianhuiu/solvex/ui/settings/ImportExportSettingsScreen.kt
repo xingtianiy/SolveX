@@ -3,17 +3,19 @@ package com.tianhuiu.solvex.ui.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
@@ -33,17 +36,20 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,12 +57,16 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.tianhuiu.solvex.data.models.AssistantConfig
+import com.tianhuiu.solvex.data.models.ModelProvider
 import com.tianhuiu.solvex.ui.ExportData
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
@@ -75,7 +85,6 @@ fun ImportExportSettingsScreen(
     var showResetDialog by remember { mutableStateOf(false) }
     var exportContent by remember { mutableStateOf("") }
 
-    // Import confirmation state
     var showImportDialog by remember { mutableStateOf(false) }
     var pendingImportData by remember { mutableStateOf<ExportData?>(null) }
 
@@ -83,6 +92,10 @@ fun ImportExportSettingsScreen(
     val selectedProviders = remember { mutableStateMapOf<String, Boolean>() }
     val includeApiKeyMap = remember { mutableStateMapOf<String, Boolean>() }
     val selectedAssistants = remember { mutableStateMapOf<String, Boolean>() }
+
+    var showProviderSheet by remember { mutableStateOf(false) }
+    var showAssistantSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
 
     // 初始化选择状态
     LaunchedEffect(viewModel.providers, viewModel.assistants) {
@@ -94,12 +107,6 @@ fun ImportExportSettingsScreen(
             if (it.id !in selectedAssistants) selectedAssistants[it.id] = true
         }
     }
-
-    // 全选逻辑
-    val allProvidersSelected =
-        viewModel.providers.isNotEmpty() && viewModel.providers.all { selectedProviders[it.id] == true }
-    val allAssistantsSelected =
-        viewModel.assistants.isNotEmpty() && viewModel.assistants.all { selectedAssistants[it.id] == true }
 
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -157,8 +164,8 @@ fun ImportExportSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("导入导出", fontWeight = FontWeight.Bold) },
+            CenterAlignedTopAppBar(
+                title = { Text("数据管理", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -205,7 +212,7 @@ fun ImportExportSettingsScreen(
                 }
             }
 
-            // 2. 导出选中项控制区
+            // 2. 分项导出入口
             item {
                 Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                     Text(
@@ -214,15 +221,35 @@ fun ImportExportSettingsScreen(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
+
+                    // 选择提供方入口
+                    val providerCount = viewModel.providers.filter { selectedProviders[it.id] == true }.size
+                    SelectionEntryCard(
+                        title = "选择模型提供方",
+                        subtitle = "已选择 $providerCount 个项目",
+                        icon = Icons.Default.Cloud,
+                        onClick = { showProviderSheet = true }
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // 选择助手入口
+                    val assistantCount = viewModel.assistants.filter { selectedAssistants[it.id] == true }.size
+                    SelectionEntryCard(
+                        title = "选择助手配置",
+                        subtitle = "已选择 $assistantCount 个项目",
+                        icon = Icons.Default.Psychology,
+                        onClick = { showAssistantSheet = true }
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
                     Button(
                         onClick = {
-                            val providers =
-                                viewModel.providers.filter { selectedProviders[it.id] == true }
-                            val assistants =
-                                viewModel.assistants.filter { selectedAssistants[it.id] == true }
-                            exportContent =
-                                viewModel.exportConfig(providers, assistants, includeApiKeyMap)
+                            val providers = viewModel.providers.filter { selectedProviders[it.id] == true }
+                            val assistants = viewModel.assistants.filter { selectedAssistants[it.id] == true }
+                            exportContent = viewModel.exportConfig(providers, assistants, includeApiKeyMap)
                             createDocumentLauncher.launch("SolveX_Export_${System.currentTimeMillis()}.json")
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -231,70 +258,12 @@ fun ImportExportSettingsScreen(
                     ) {
                         Icon(Icons.Default.Download, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("导出选中项")
+                        Text("导出选中项", fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            // 3. 模型提供方选择
-            item {
-                SectionHeader(
-                    title = "模型提供方",
-                    count = viewModel.providers.size,
-                    checked = allProvidersSelected,
-                    onCheckedChange = { checked ->
-                        viewModel.providers.forEach { selectedProviders[it.id] = checked }
-                    },
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-            }
-
-            items(viewModel.providers) { provider ->
-                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    SelectionItemCard(
-                        title = provider.name,
-                        subtitle = provider.type.displayName,
-                        isSelected = selectedProviders[provider.id] ?: false,
-                        onSelectedChange = { selectedProviders[provider.id] = it },
-                        trailing = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("包含密钥", style = MaterialTheme.typography.labelSmall)
-                                Checkbox(
-                                    checked = includeApiKeyMap[provider.id] ?: false,
-                                    onCheckedChange = { includeApiKeyMap[provider.id] = it },
-                                    enabled = selectedProviders[provider.id] ?: false
-                                )
-                            }
-                        }
-                    )
-                }
-            }
-
-            // 4. 助手配置选择
-            item {
-                SectionHeader(
-                    title = "助手配置",
-                    count = viewModel.assistants.size,
-                    checked = allAssistantsSelected,
-                    onCheckedChange = { checked ->
-                        viewModel.assistants.forEach { selectedAssistants[it.id] = checked }
-                    },
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-            }
-
-            items(viewModel.assistants) { assistant ->
-                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    SelectionItemCard(
-                        title = assistant.name,
-                        subtitle = "助手身份配置",
-                        isSelected = selectedAssistants[assistant.id] ?: false,
-                        onSelectedChange = { selectedAssistants[assistant.id] = it }
-                    )
-                }
-            }
-
-            // 5. 危险操作
+            // 3. 危险操作
             item {
                 Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 16.dp)) {
                     Text(
@@ -306,18 +275,25 @@ fun ImportExportSettingsScreen(
                     Spacer(Modifier.height(8.dp))
                     Surface(
                         onClick = { showResetDialog = true },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.08f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error)
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                            }
                             Spacer(Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("重置所有配置", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                                Text("重置所有配置", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                                 Text("清空全部数据并恢复到出厂默认状态", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -325,6 +301,48 @@ fun ImportExportSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showProviderSheet) {
+        MultiSelectionSheet(
+            title = "选择模型提供方",
+            items = viewModel.providers,
+            selectedMap = selectedProviders,
+            sheetState = sheetState,
+            onDismissRequest = { showProviderSheet = false },
+            itemContent = { provider ->
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(provider.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    Text(provider.type.displayName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("密钥", style = MaterialTheme.typography.labelSmall)
+                    Checkbox(
+                        checked = includeApiKeyMap[provider.id] ?: false,
+                        onCheckedChange = { includeApiKeyMap[provider.id] = it },
+                        enabled = selectedProviders[provider.id] ?: false
+                    )
+                }
+            }
+        )
+    }
+
+    if (showAssistantSheet) {
+        MultiSelectionSheet(
+            title = "选择助手配置",
+            items = viewModel.assistants,
+            selectedMap = selectedAssistants,
+            sheetState = sheetState,
+            onDismissRequest = { showAssistantSheet = false },
+            itemContent = { assistant ->
+                Text(
+                    assistant.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        )
     }
 
     if (showResetDialog) {
@@ -390,7 +408,7 @@ fun ImportExportSettingsScreen(
                 HorizontalDivider()
                 Surface(
                     shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.errorContainer
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -411,6 +429,116 @@ fun ImportExportSettingsScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> MultiSelectionSheet(
+    title: String,
+    items: List<T>,
+    selectedMap: SnapshotStateMap<String, Boolean>,
+    sheetState: SheetState,
+    onDismissRequest: () -> Unit,
+    itemContent: @Composable RowScope.(T) -> Unit,
+    idSelector: (T) -> String = { (it as? ModelProvider)?.id ?: (it as? AssistantConfig)?.id ?: "" }
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        dragHandle = {
+            Column(
+                modifier = Modifier.padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    modifier = Modifier.width(32.dp).height(4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(2.dp)
+                ) {}
+            }
+        }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                
+                val allSelected = items.isNotEmpty() && items.all { selectedMap[idSelector(it)] == true }
+                TextButton(onClick = {
+                    val target = !allSelected
+                    items.forEach { selectedMap[idSelector(it)] = target }
+                }) {
+                    Text(if (allSelected) "取消全选" else "全选")
+                }
+            }
+            
+            Spacer(Modifier.height(12.dp))
+            
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(items) { item ->
+                    val id = idSelector(item)
+                    val isSelected = selectedMap[id] ?: false
+                    Surface(
+                        onClick = { selectedMap[id] = !isSelected },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = isSelected, onCheckedChange = { selectedMap[id] = it })
+                            Spacer(Modifier.width(8.dp))
+                            itemContent(item)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SelectionEntryCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
         }
     }
 }
@@ -456,77 +584,6 @@ fun ActionCard(
             Spacer(Modifier.height(12.dp))
             Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun SectionHeader(
-    title: String,
-    count: Int,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "$title ($count)",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f)
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { onCheckedChange(!checked) }
-        ) {
-            Text("全选", style = MaterialTheme.typography.labelSmall)
-            Checkbox(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                modifier = Modifier.size(32.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun SelectionItemCard(
-    title: String,
-    subtitle: String,
-    isSelected: Boolean,
-    onSelectedChange: (Boolean) -> Unit,
-    trailing: @Composable (() -> Unit)? = null
-) {
-    Surface(
-        onClick = { onSelectedChange(!isSelected) },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f) 
-                else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(
-            1.dp, 
-            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = isSelected,
-                onCheckedChange = onSelectedChange
-            )
-            Spacer(Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            trailing?.invoke()
         }
     }
 }

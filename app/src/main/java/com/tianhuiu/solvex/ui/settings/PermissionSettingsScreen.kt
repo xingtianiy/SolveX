@@ -11,18 +11,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccessibilityNew
-import androidx.compose.material.icons.filled.BatterySaver
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Accessibility
+import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Window
 import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +43,7 @@ import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 import com.tianhuiu.solvex.ui.components.SolveXConfirmDialog
+import com.tianhuiu.solvex.utils.SystemUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +61,7 @@ fun PermissionSettingsScreen(
         mutableStateOf(Settings.canDrawOverlays(context))
     }
     var isAccessibilityEnabled by remember {
-        mutableStateOf(isAccessibilityServiceEnabled(context))
+        mutableStateOf(SystemUtils.isAccessibilityServiceEnabled(context, SolveXAccessibilityService::class.java))
     }
     var isBatteryOptimized by remember {
         val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
@@ -76,7 +77,7 @@ fun PermissionSettingsScreen(
                 isNotificationEnabled =
                     NotificationManagerCompat.from(context).areNotificationsEnabled()
                 isSystemAlertEnabled = Settings.canDrawOverlays(context)
-                isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+                isAccessibilityEnabled = SystemUtils.isAccessibilityServiceEnabled(context, SolveXAccessibilityService::class.java)
                 isBatteryOptimized =
                     !(context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager)
                         .isIgnoringBatteryOptimizations(context.packageName)
@@ -91,7 +92,7 @@ fun PermissionSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("权限设置", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -110,9 +111,9 @@ fun PermissionSettingsScreen(
             item {
                 SettingsGroup(title = "系统权限") {
                     SettingsItem(
-                        label = "通知权限",
-                        subLabel = if (isNotificationEnabled) "已授予通知权限" else "需要通知权限以显示识别结果",
-                        icon = Icons.Default.Notifications,
+                        label = "通知提醒",
+                        subLabel = if (isNotificationEnabled) "实时接收分析进度与结果" else "由于系统限制，需授权以显示识别结果",
+                        icon = Icons.Default.NotificationsActive,
                         trailing = {
                             Button(
                                 onClick = {
@@ -132,9 +133,9 @@ fun PermissionSettingsScreen(
                         }
                     )
                     SettingsItem(
-                        label = "悬浮窗权限",
-                        subLabel = if (isSystemAlertEnabled) "已授予悬浮窗权限" else "需要悬浮窗权限以提供快速操作",
-                        icon = Icons.Default.Layers,
+                        label = "悬浮窗管理",
+                        subLabel = if (isSystemAlertEnabled) "支持在其他应用上方显示快捷操作" else "核心功能，用于在屏幕上显示分析按钮",
+                        icon = Icons.Default.Window,
                         trailing = {
                             Button(
                                 onClick = {
@@ -152,8 +153,8 @@ fun PermissionSettingsScreen(
                     )
                     SettingsItem(
                         label = "无障碍服务",
-                        subLabel = if (isAccessibilityEnabled) "无障碍服务已开启" else "开启无障碍服务使用无障碍截图",
-                        icon = Icons.Default.AccessibilityNew,
+                        subLabel = if (isAccessibilityEnabled) "已具备屏幕取色与自动化操作能力" else "开启后可支持无障碍截屏及屏幕取词",
+                        icon = Icons.Default.Accessibility,
                         trailing = {
                             Button(
                                 onClick = { viewModel.requestAccessibilityPermission() },
@@ -165,8 +166,8 @@ fun PermissionSettingsScreen(
                     )
                     SettingsItem(
                         label = "电池优化",
-                        subLabel = if (isBatteryOptimized) "已开启电池优化" else "已允许后台运行",
-                        icon = Icons.Default.BatterySaver,
+                        subLabel = if (isBatteryOptimized) "建议关闭以防止后台服务被系统拦截" else "已允许应用在后台持续稳定运行",
+                        icon = Icons.Default.BatteryFull,
                         trailing = {
                             Button(
                                 onClick = {
@@ -182,10 +183,10 @@ fun PermissionSettingsScreen(
                     SettingsItem(
                         label = "Shizuku 授权",
                         subLabel = when {
-                            !viewModel.isShizukuInstalled -> "未检测到 Shizuku 应用"
-                            !viewModel.isShizukuRunning -> "Shizuku 服务未运行，请先启动 Shizuku"
-                            !viewModel.isShizukuPermissionGranted -> "Shizuku 已运行但未授权 SolveX"
-                            else -> "Shizuku 授权正常"
+                            !viewModel.isShizukuInstalled -> "检测到尚未安装 Shizuku 环境"
+                            !viewModel.isShizukuRunning -> "Shizuku 服务未启动，建议手动开启"
+                            !viewModel.isShizukuPermissionGranted -> "环境已就绪，请授予 SolveX 调用权限"
+                            else -> "已获得高级系统调用权限 (ADB)"
                         },
                         icon = Icons.Default.Terminal,
                         trailing = {
@@ -250,13 +251,4 @@ fun PermissionSettingsScreen(
             icon = Icons.Default.Terminal
         )
     }
-}
-
-private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
-    val serviceName = "${context.packageName}/${SolveXAccessibilityService::class.java.name}"
-    val enabledServices = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    return enabledServices.split(':').any { it == serviceName }
 }

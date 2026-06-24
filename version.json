@@ -1,13 +1,14 @@
 {
-  "versionCode": 12,
-  "versionName": "0.1.2-alpha",
-  "releaseDate": "2026-06-24",
+  "versionCode": 13,
+  "versionName": "0.1.3-alpha",
+  "releaseDate": "2026-06-25",
   "level": "recommended",
   "apkSize": "19 MB",
   "updateLog": [
-    "新增屏幕取字模式，不依赖截图的纯文本提取，需开启无障碍模式",
-    "优化 AI 处理流程，优化悬浮球显示逻辑，答案展示完成后才切换悬浮球状态"
+    "UI 与体验优化，优化悬浮球交互逻辑，提升整体运行稳定性。",
+    "全新权限引导中心，分步式可视化指引，实时监测权限状态，上手更简单。",
+    "支持 Shizuku 一键提权，自动开启无障碍服务并授予底层权限，配置流程更高效。"
   ],
-  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.1.2-alpha/app-release.apk",
-  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.1.2-alpha/app-release.apk"
+  "githubUrl": "https://github.com/xingtianiy/SolveX/releases/download/v0.1.3-alpha/app-release.apk",
+  "giteeUrl": "https://gitee.com/xingtianiy/SolveX/releases/download/v0.1.3-alpha/app-release.apk"
 }

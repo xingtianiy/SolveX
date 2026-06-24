@@ -1,5 +1,12 @@
 package com.tianhuiu.solvex.ui
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
@@ -50,7 +57,7 @@ import com.tianhuiu.solvex.ui.settings.TutorialScreen
  */
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     data object Home : Screen("home", "首页", Icons.Default.Home)
-    data object History : Screen("history", "历史", Icons.Default.History)
+    data object History : Screen("history", "历史记录", Icons.Default.History)
     data object Settings : Screen("settings", "设置", Icons.Default.Settings)
 }
 
@@ -114,7 +121,7 @@ fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
                 if (showBottomBar) {
                     NavigationBar {
                         items.forEach { screen ->
-                            val hasSettingsBadge = screen == Screen.Settings && run {
+                            val hasSettingsBadge = (screen == Screen.Settings) && run {
                                 val updateBadge = updateViewModel.updateInfo != null
                                 val permissionBadge = !viewModel.isAllPermissionsReady
                                 val providerBadge = viewModel.providers.all { it.apiKey.isBlank() }
@@ -167,7 +174,43 @@ fun SolveXApp(viewModel: MainViewModel, updateViewModel: UpdateViewModel) {
             NavHost(
                 navController = navController,
                 startDestination = Screen.Home.route,
-                modifier = Modifier.padding(innerPadding)
+                modifier = Modifier.padding(innerPadding),
+                enterTransition = {
+                    val targetRoute = targetState.destination.route ?: ""
+                    val isTabRoot = items.any { it.route == targetRoute }
+                    if (isTabRoot) EnterTransition.None
+                    else slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(durationMillis = 300)
+                    )
+                },
+                exitTransition = {
+                    val targetRoute = targetState.destination.route ?: ""
+                    val isTabRoot = items.any { it.route == targetRoute }
+                    if (isTabRoot) ExitTransition.None
+                    else slideOutHorizontally(
+                        targetOffsetX = { -it / 4 },
+                        animationSpec = tween(durationMillis = 300)
+                    ) + fadeOut(animationSpec = tween(durationMillis = 300))
+                },
+                popEnterTransition = {
+                    val targetRoute = targetState.destination.route ?: ""
+                    val isTabRoot = items.any { it.route == targetRoute }
+                    if (isTabRoot) EnterTransition.None
+                    else slideInHorizontally(
+                        initialOffsetX = { -it / 4 },
+                        animationSpec = tween(durationMillis = 300)
+                    ) + fadeIn(animationSpec = tween(durationMillis = 300))
+                },
+                popExitTransition = {
+                    val targetRoute = targetState.destination.route ?: ""
+                    val isTabRoot = items.any { it.route == targetRoute }
+                    if (isTabRoot) ExitTransition.None
+                    else slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(durationMillis = 300)
+                    )
+                }
             ) {
                 composable(Screen.Home.route) {
                     HomeScreen(

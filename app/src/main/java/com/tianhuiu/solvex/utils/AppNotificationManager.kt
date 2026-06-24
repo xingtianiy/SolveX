@@ -32,7 +32,7 @@ class AppNotificationManager {
                         id = "STATUS_RUNNING",
                         type = com.tianhuiu.solvex.data.models.NotificationType.READY_STATUS,
                         title = "SolveX 服务运行中",
-                        content = "点击悬浮球截图解题"
+                        content = "AI 也会犯错，不要过度相信！"
                     )
                 )
                 isReady -> next.add(

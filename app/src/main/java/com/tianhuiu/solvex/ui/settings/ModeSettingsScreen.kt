@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -12,34 +11,32 @@ import androidx.compose.material.icons.automirrored.filled.ViewSidebar
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Dock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tianhuiu.solvex.data.models.DrawerSide
 import com.tianhuiu.solvex.mode.ModeRegistry
 import com.tianhuiu.solvex.ui.MainViewModel
 import com.tianhuiu.solvex.ui.components.ModelSelectorItem
+import com.tianhuiu.solvex.ui.components.NumberStepper
 import com.tianhuiu.solvex.ui.components.SettingBadge
 import com.tianhuiu.solvex.ui.components.SettingsGroup
 import com.tianhuiu.solvex.ui.components.SettingsItem
 
-// 统一模式设置页面
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModeSettingsScreen(
@@ -47,13 +44,18 @@ fun ModeSettingsScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit,
 ) {
+    // 确保 ViewModel 中的 selectedModeId 同步，否则更新配置会写错位置
+    LaunchedEffect(modeId) {
+        viewModel.setMode(modeId)
+    }
+
     val mode = ModeRegistry.get(modeId)
-    val config = viewModel.currentModeConfig
+    val config = viewModel.allModeConfigs[modeId] ?: mode.defaultConfig()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("${mode.displayName}配置") },
+            CenterAlignedTopAppBar(
+                title = { Text("${mode.displayName}配置", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -82,6 +84,7 @@ fun ModeSettingsScreen(
                         onFetchModels = { viewModel.fetchModelsDirect(it) },
                         onModelSelected = { pid, model ->
                             viewModel.updateModeConfig(
+                                modeId,
                                 config.copy(ocrProviderId = pid, ocrModel = model)
                             )
                         },
@@ -100,6 +103,7 @@ fun ModeSettingsScreen(
                         onFetchModels = { viewModel.fetchModelsDirect(it) },
                         onModelSelected = { pid, model ->
                             viewModel.updateModeConfig(
+                                modeId,
                                 config.copy(textProviderId = pid, textModel = model)
                             )
                         },
@@ -118,6 +122,7 @@ fun ModeSettingsScreen(
                         onFetchModels = { viewModel.fetchModelsDirect(it) },
                         onModelSelected = { pid, model ->
                             viewModel.updateModeConfig(
+                                modeId,
                                 config.copy(visionProviderId = pid, visionModel = model)
                             )
                         },
@@ -136,21 +141,15 @@ fun ModeSettingsScreen(
                         subLabel = "等待首个字符返回的最长时间",
                         icon = Icons.Default.Timer,
                         trailing = {
-                            var text by remember(config.firstDeltaTimeoutSeconds) {
-                                mutableStateOf(config.firstDeltaTimeoutSeconds.toString())
-                            }
-                            OutlinedTextField(
-                                value = text,
-                                onValueChange = {
-                                    text = it
-                                    it.toLongOrNull()?.let { seconds ->
-                                        viewModel.updateModeConfig(
-                                            config.copy(firstDeltaTimeoutSeconds = seconds)
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.width(80.dp),
-                                singleLine = true
+                            NumberStepper(
+                                value = config.firstDeltaTimeoutSeconds,
+                                step = 5,
+                                onValueChange = { seconds ->
+                                    viewModel.updateModeConfig(
+                                        modeId,
+                                        config.copy(firstDeltaTimeoutSeconds = seconds)
+                                    )
+                                }
                             )
                         }
                     )
@@ -166,11 +165,14 @@ fun ModeSettingsScreen(
                         subLabel = if (isNotificationEnabled) "识别完成后发送系统通知" else "系统通知权限已禁用，请在设置中开启",
                         icon = Icons.Default.Notifications,
                         enabled = isNotificationEnabled,
+                        onClick = {
+                            viewModel.updateModeConfig(modeId, config.copy(allowNotification = !config.allowNotification))
+                        },
                         trailing = {
                             Switch(
                                 checked = config.allowNotification && isNotificationEnabled,
                                 onCheckedChange = {
-                                    viewModel.updateModeConfig(config.copy(allowNotification = it))
+                                    viewModel.updateModeConfig(modeId, config.copy(allowNotification = it))
                                 },
                                 enabled = isNotificationEnabled
                             )
@@ -180,11 +182,14 @@ fun ModeSettingsScreen(
                         label = "自动弹出抽屉",
                         subLabel = "开始解析后自动打开侧边抽屉实时展示结果",
                         icon = Icons.AutoMirrored.Filled.ViewSidebar,
+                        onClick = {
+                            viewModel.updateModeConfig(modeId, config.copy(autoOpenDrawer = !config.autoOpenDrawer))
+                        },
                         trailing = {
                             Switch(
                                 checked = config.autoOpenDrawer,
                                 onCheckedChange = {
-                                    viewModel.updateModeConfig(config.copy(autoOpenDrawer = it))
+                                    viewModel.updateModeConfig(modeId, config.copy(autoOpenDrawer = it))
                                 }
                             )
                         }
@@ -192,17 +197,19 @@ fun ModeSettingsScreen(
                     SettingsItem(
                         label = "抽屉弹出位置",
                         subLabel = "选择侧边抽屉的弹出方向",
-                        icon = Icons.AutoMirrored.Filled.ViewSidebar,
+                        icon = Icons.Default.Dock,
+                        enabled = config.autoOpenDrawer,
                         trailing = {
                             Row {
                                 DrawerSide.entries.forEach { side ->
                                     FilterChip(
                                         selected = config.drawerSide == side,
                                         onClick = {
-                                            viewModel.updateModeConfig(config.copy(drawerSide = side))
+                                            viewModel.updateModeConfig(modeId, config.copy(drawerSide = side))
                                         },
                                         label = { Text(side.displayName) },
-                                        modifier = Modifier.padding(start = 8.dp)
+                                        modifier = Modifier.padding(start = 8.dp),
+                                        enabled = config.autoOpenDrawer
                                     )
                                 }
                             }
@@ -212,11 +219,15 @@ fun ModeSettingsScreen(
                         label = "启用截图裁剪",
                         subLabel = if (config.enableCrop == true) "截图后手动框选目标区域" else "截图后直接全屏解析",
                         icon = Icons.Default.Crop,
+                        onClick = {
+                            val current = config.enableCrop ?: mode.shouldCrop
+                            viewModel.updateModeConfig(modeId, config.copy(enableCrop = !current))
+                        },
                         trailing = {
                             Switch(
                                 checked = config.enableCrop ?: mode.shouldCrop,
                                 onCheckedChange = { enabled ->
-                                    viewModel.updateModeConfig(config.copy(enableCrop = enabled))
+                                    viewModel.updateModeConfig(modeId, config.copy(enableCrop = enabled))
                                 }
                             )
                         }

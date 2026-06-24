@@ -39,7 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 使用教程页面。纯 Compose 渲染，无需网络连接。
+ * 使用教程页面
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +48,8 @@ fun TutorialScreen(onBack: () -> Unit) {
     val tutorialFileNames = listOf(
         "tutorial/01.md",
         "tutorial/02.md",
-        "tutorial/03.md"
+        "tutorial/03.md",
+        "tutorial/04.md"
     )
 
     var currentPage by remember { mutableIntStateOf(0) }
@@ -62,7 +63,7 @@ fun TutorialScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("使用教程", fontWeight = FontWeight.Bold) },
+                title = { Text("功能指南", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")

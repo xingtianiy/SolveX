@@ -68,7 +68,7 @@ enum class DrawerSide(val displayName: String) {
 @Serializable
 data class DrawerSettings(
     val side: DrawerSide = DrawerSide.LEFT,
-    val widthPercent: Float = 0.8f // 0.3 to 0.9
+    val widthPercent: Float = 0.9f // 0.3 to 0.9
 )
 
 /**
